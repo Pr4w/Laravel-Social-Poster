@@ -1,5 +1,5 @@
 {
-    "name": "pr4w/social-poster",
+    "name": "pr4w/laravel-social-poster",
     "description": "A cleanly-architected Laravel package for publishing content to multiple social platforms.",
     "type": "library",
     "license": "MIT",
