@@ -1,0 +1,31 @@
+{
+    "name": "vendor/social-poster",
+    "description": "A cleanly-architected Laravel package for publishing content to multiple social platforms.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0",
+        "illuminate/bus": "^11.0|^12.0",
+        "illuminate/queue": "^11.0|^12.0",
+        "illuminate/contracts": "^11.0|^12.0",
+        "symfony/process": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SocialPoster\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "SocialPoster\\SocialPosterServiceProvider"
+            ],
+            "aliases": {
+                "SocialPoster": "SocialPoster\\Facades\\SocialPoster"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
