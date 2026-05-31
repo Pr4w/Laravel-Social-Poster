@@ -8,7 +8,7 @@ that is the next step.
 ## Rename before use
 
 The placeholder namespace is `SocialPoster\` and the composer name is
-`Pr4w/social-poster`. Set your own vendor in `composer.json` and run a
+`vendor/social-poster`. Set your own vendor in `composer.json` and run a
 find/replace on the namespace if you want it branded.
 
 ## Public surface
@@ -155,8 +155,8 @@ models this without ever blocking a worker.
 
 A driver's `publish()` returns a `PublishOutcome`, either:
 
--   `Published` (terminal) carrying a `PostResult`, or
--   `Pending` carrying serialisable `state` and a `recheckAfter` delay.
+- `Published` (terminal) carrying a `PostResult`, or
+- `Pending` carrying serialisable `state` and a `recheckAfter` delay.
 
 When `post()` is queued and a driver returns `Pending`, the job dispatches a
 delayed continuation carrying that state, which calls the driver's `resume()` on

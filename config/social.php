@@ -23,6 +23,9 @@ return [
         Platform::Facebook->value => SocialPoster\Platforms\Facebook\FacebookDriver::class,
         Platform::Instagram->value => SocialPoster\Platforms\Instagram\InstagramDriver::class,
         Platform::LinkedIn->value => SocialPoster\Platforms\LinkedIn\LinkedInDriver::class,
+        Platform::Threads->value => SocialPoster\Platforms\Threads\ThreadsDriver::class,
+        Platform::X->value => SocialPoster\Platforms\X\XDriver::class,
+        Platform::TikTok->value => SocialPoster\Platforms\TikTok\TikTokDriver::class,
     ],
 
     // Static, single-account credentials per platform. Omit and pass credentials
