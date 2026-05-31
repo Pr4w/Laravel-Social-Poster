@@ -276,12 +276,31 @@ class TikTokDriver extends AbstractPlatform
         $computed = [
             'title' => $caption,
             'privacy_level' => $privacy->value,
-            'disable_comment' => ($creator['comment_disabled'] ?? false) || ($options->disableComment ?? false),
         ];
 
+        // The disable_* toggles are optional. Only send one when the creator
+        // forces it off account-wide, or when the caller explicitly set it.
+        // Sending disable_duet=false on a SELF_ONLY post contradicts TikTok
+        // (private posts can't be dueted or stitched) and is rejected as
+        // invalid_params, so by default we omit them and let TikTok apply the
+        // right value for the chosen privacy level.
+        $resolve = static fn (bool $forced, ?bool $chosen): ?bool => $forced ? true : $chosen;
+
+        $comment = $resolve((bool) ($creator['comment_disabled'] ?? false), $options->disableComment);
+        if ($comment !== null) {
+            $computed['disable_comment'] = $comment;
+        }
+
         if ($video) {
-            $computed['disable_duet'] = ($creator['duet_disabled'] ?? false) || ($options->disableDuet ?? false);
-            $computed['disable_stitch'] = ($creator['stitch_disabled'] ?? false) || ($options->disableStitch ?? false);
+            $duet = $resolve((bool) ($creator['duet_disabled'] ?? false), $options->disableDuet);
+            if ($duet !== null) {
+                $computed['disable_duet'] = $duet;
+            }
+
+            $stitch = $resolve((bool) ($creator['stitch_disabled'] ?? false), $options->disableStitch);
+            if ($stitch !== null) {
+                $computed['disable_stitch'] = $stitch;
+            }
 
             if ($options->coverTimestampMs !== null) {
                 $computed['video_cover_timestamp_ms'] = $options->coverTimestampMs;
