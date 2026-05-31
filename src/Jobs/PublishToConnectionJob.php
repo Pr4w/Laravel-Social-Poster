@@ -4,6 +4,7 @@ namespace SocialPoster\Jobs;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -35,8 +36,17 @@ use SocialPoster\ValueObjects\SocialPost;
  *
  * Note: credentials are serialised into the queue payload; use an encrypted or
  * trusted queue store if your tokens are sensitive.
+ *
+ * Uniqueness: ShouldBeUniqueUntilProcessing prevents the same publish being
+ * dispatched twice while one is still queued. The lock releases when the job
+ * starts, so it does not block the continuation this job dispatches for itself.
+ * It guards duplicate dispatch, not at-least-once redelivery; surviving a retry
+ * that already published needs a persisted idempotency store. Without an explicit
+ * correlationId the lock key is derived from the post content, so two genuinely
+ * identical posts queued at the same moment will collide; pass a correlationId to
+ * make each publish distinct. Requires a cache store that supports atomic locks.
  */
-class PublishToConnectionJob implements ShouldQueue
+class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -46,6 +56,8 @@ class PublishToConnectionJob implements ShouldQueue
     public int $tries = 5;
 
     public int $maxPolls = 60;
+
+    public int $uniqueFor = 3600;
 
     /**
      * @param array<string, mixed>|null $state
@@ -57,7 +69,24 @@ class PublishToConnectionJob implements ShouldQueue
         public readonly bool $skipValidation = false,
         public readonly ?array $state = null,
         public readonly int $pollCount = 0,
+        public readonly ?string $correlationId = null,
     ) {}
+
+    public function uniqueId(): string
+    {
+        return $this->correlationId ?? $this->contentKey();
+    }
+
+    protected function contentKey(): string
+    {
+        $sources = array_map(static fn ($media) => $media->source, $this->post->media);
+
+        return $this->platform->value.':'.md5((string) json_encode([
+            $this->post->caption,
+            $this->post->title,
+            $sources,
+        ]));
+    }
 
     public function handle(SocialManager $platforms, Dispatcher $events): void
     {
@@ -123,6 +152,7 @@ class PublishToConnectionJob implements ShouldQueue
             true,
             $pending->state,
             $this->pollCount + 1,
+            $this->correlationId,
         )->delay(now()->addSeconds($pending->recheckAfter));
 
         if (! empty($this->queue)) {

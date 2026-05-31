@@ -214,11 +214,24 @@ class FacebookDriver extends AbstractPlatform
             $params['description'] = trim((string) $post->caption());
         }
 
-        if (($thumb = $this->options($post)?->thumbnail) !== null) {
-            $params['thumb'] = $this->mediaUrl($thumb);
-        }
+        $thumb = $this->options($post)?->thumbnail;
+        $request = $this->http($post)->timeout(120);
 
-        $response = $this->http($post)->asForm()->timeout(60)->post($this->edge($post, '/videos'), $params);
+        try {
+            // Facebook wants the thumbnail as uploaded image bytes, not a URL.
+            // Attaching it makes the request multipart, with file_url and
+            // description riding along as form fields.
+            if ($thumb !== null) {
+                $extension = $thumb->extension() !== '' ? $thumb->extension() : 'jpg';
+                $request = $request->attach('thumb', $this->bytes($thumb), "thumbnail.{$extension}");
+            } else {
+                $request = $request->asForm();
+            }
+
+            $response = $request->post($this->edge($post, '/videos'), $params);
+        } finally {
+            $this->gateway()?->cleanup();
+        }
 
         return $this->ok($response)
             ? $this->published(PostResult::success(Platform::Facebook, $response->json('id')))
@@ -343,6 +356,11 @@ class FacebookDriver extends AbstractPlatform
     protected function token(PreparedPost $post): string
     {
         return (string) $post->credentials->get('page_access_token');
+    }
+
+    protected function bytes(Media $media): string
+    {
+        return (string) file_get_contents($this->mediaPath($media));
     }
 
     protected function edge(PreparedPost $post, string $path): string
