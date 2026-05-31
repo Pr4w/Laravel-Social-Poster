@@ -332,6 +332,8 @@ class TikTokDriver extends AbstractPlatform
 
     protected function queryCreatorInfo(PreparedPost $post): array
     {
+        // TikTok rejects a JSON [] body as a type error. Passing null makes
+        // Laravel send a null body, which it accepts as "no parameters".
         $response = $this->tt($post)->post($this->api.'/post/publish/creator_info/query/', null);
 
         if (! $this->ok($response)) {
