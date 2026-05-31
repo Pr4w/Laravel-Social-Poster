@@ -332,7 +332,7 @@ class TikTokDriver extends AbstractPlatform
 
     protected function queryCreatorInfo(PreparedPost $post): array
     {
-        $response = $this->tt($post)->post($this->api.'/post/publish/creator_info/query/');
+        $response = $this->tt($post)->post($this->api.'/post/publish/creator_info/query/', null);
 
         if (! $this->ok($response)) {
             throw $this->mapError($response);
