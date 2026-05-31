@@ -255,7 +255,7 @@ class XDriver extends AbstractPlatform
             $payload['media'] = ['media_ids' => $mediaIds];
         }
 
-        $response = $this->authed($post)->post($this->api.'/tweets', $payload);
+        $response = $this->authed($post)->post($this->api.'/tweets', $this->mergeExtra($post, $payload));
 
         if (! $response->successful()) {
             throw $this->mapError($response);

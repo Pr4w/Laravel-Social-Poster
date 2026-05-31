@@ -134,7 +134,7 @@ class InstagramDriver extends AbstractPlatform
             $params['media_type'] = 'STORIES';
         }
 
-        $container = $this->http($post)->post($this->edge($post, '/media'), $params);
+        $container = $this->http($post)->post($this->edge($post, '/media'), $this->mergeExtra($post, $params));
 
         if (! $this->ok($container)) {
             throw $this->mapError($container);
@@ -160,7 +160,7 @@ class InstagramDriver extends AbstractPlatform
             }
         }
 
-        $container = $this->http($post)->post($this->edge($post, '/media'), $params);
+        $container = $this->http($post)->post($this->edge($post, '/media'), $this->mergeExtra($post, $params));
 
         if (! $this->ok($container)) {
             throw $this->mapError($container);
@@ -236,11 +236,11 @@ class InstagramDriver extends AbstractPlatform
             }
         }
 
-        $parent = $this->http($post)->post($this->edge($post, '/media'), [
+        $parent = $this->http($post)->post($this->edge($post, '/media'), $this->mergeExtra($post, [
             'media_type' => 'CAROUSEL',
             'caption' => $state['caption'] ?? '',
             'children' => implode(',', $state['children']),
-        ]);
+        ]));
 
         if (! $this->ok($parent)) {
             throw $this->mapError($parent);

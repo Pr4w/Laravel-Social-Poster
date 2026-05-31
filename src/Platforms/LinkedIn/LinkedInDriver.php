@@ -367,7 +367,7 @@ class LinkedInDriver extends AbstractPlatform
             $payload['content'] = $content;
         }
 
-        return $payload;
+        return $this->mergeExtra($post, $payload);
     }
 
     protected function assetStatus(PreparedPost $post, string $videoUrn): string

@@ -136,4 +136,33 @@ abstract class AbstractPlatform implements SocialPlatform
     {
         return $this->gateway?->path($media) ?? $media->source;
     }
+
+    /**
+     * The raw passthrough payload for THIS platform, or [] if none applies.
+     * Scoped by platform() so an options object set for another platform in a
+     * fan-out can never leak its params into this driver's request.
+     *
+     * @return array<string, mixed>
+     */
+    protected function extraPayload(PreparedPost $post): array
+    {
+        $options = $post->options();
+
+        return $options !== null && $options->platform() === $this->platform()
+            ? $options->extra()
+            : [];
+    }
+
+    /**
+     * Merge the raw passthrough into a create request. Driver-computed keys win
+     * on collision, so the escape hatch can add fields but never silently
+     * override what the driver already decided (media_type, urls, ids, ...).
+     *
+     * @param  array<string, mixed>  $params
+     * @return array<string, mixed>
+     */
+    protected function mergeExtra(PreparedPost $post, array $params): array
+    {
+        return array_merge($this->extraPayload($post), $params);
+    }
 }

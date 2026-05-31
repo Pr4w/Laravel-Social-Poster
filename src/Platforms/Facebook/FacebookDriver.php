@@ -174,7 +174,7 @@ class FacebookDriver extends AbstractPlatform
 
     protected function publishText(PreparedPost $post): PublishOutcome
     {
-        $response = $this->http($post)->post($this->edge($post, '/feed'), $this->prepare($post));
+        $response = $this->http($post)->post($this->edge($post, '/feed'), $this->mergeExtra($post, $this->prepare($post)));
 
         return $this->ok($response)
             ? $this->published(PostResult::success(Platform::Facebook, $response->json('id')))
@@ -199,7 +199,7 @@ class FacebookDriver extends AbstractPlatform
         }
 
         $params = $this->prepare($post) + ['attached_media' => $attached];
-        $response = $this->http($post)->post($this->edge($post, '/feed'), $params);
+        $response = $this->http($post)->post($this->edge($post, '/feed'), $this->mergeExtra($post, $params));
 
         return $this->ok($response)
             ? $this->published(PostResult::success(Platform::Facebook, $response->json('id')))
@@ -213,6 +213,8 @@ class FacebookDriver extends AbstractPlatform
         if (trim((string) $post->caption()) !== '') {
             $params['description'] = trim((string) $post->caption());
         }
+
+        $params = $this->mergeExtra($post, $params);
 
         $thumb = $this->options($post)?->thumbnail;
         $request = $this->http($post)->timeout(120);

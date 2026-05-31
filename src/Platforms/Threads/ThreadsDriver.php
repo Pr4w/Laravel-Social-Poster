@@ -119,7 +119,7 @@ class ThreadsDriver extends AbstractPlatform
             $params['text'] = $caption;
         }
 
-        $response = $this->http($post)->post($this->edge($post, '/threads'), $params);
+        $response = $this->http($post)->post($this->edge($post, '/threads'), $this->mergeExtra($post, $params));
 
         if (! $this->ok($response)) {
             throw $this->mapError($response);
@@ -206,7 +206,7 @@ class ThreadsDriver extends AbstractPlatform
             $params['text'] = $state['text'];
         }
 
-        $response = $this->http($post)->post($this->edge($post, '/threads'), $params);
+        $response = $this->http($post)->post($this->edge($post, '/threads'), $this->mergeExtra($post, $params));
 
         if (! $this->ok($response)) {
             throw $this->mapError($response);
