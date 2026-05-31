@@ -36,7 +36,7 @@ class LinkedInDriver extends AbstractPlatform
 {
     protected string $rest = 'https://api.linkedin.com/rest';
 
-    protected string $version = '202405';
+    protected string $version = '202605';
 
     public function platform(): Platform
     {
