@@ -185,7 +185,7 @@ class TikTokDriver extends AbstractPlatform
             $response = $this->tt($post)->post($this->api.$endpoint, $body);
 
             if (! $this->ok($response)) {
-                throw $this->mapError($response);
+                throw $this->mapError($response, $body);
             }
 
             return $this->awaitPublish($response->json('data.publish_id'), $direct);
@@ -207,7 +207,7 @@ class TikTokDriver extends AbstractPlatform
             $response = $this->tt($post)->post($this->api.$endpoint, $body);
 
             if (! $this->ok($response)) {
-                throw $this->mapError($response);
+                throw $this->mapError($response, $body);
             }
 
             $this->putChunks($response->json('data.upload_url'), $path, $size, $chunkSize, $totalChunks, $this->videoMime($video));
@@ -243,7 +243,7 @@ class TikTokDriver extends AbstractPlatform
         $response = $this->tt($post)->post($this->api.'/post/publish/content/init/', $body);
 
         if (! $this->ok($response)) {
-            throw $this->mapError($response);
+            throw $this->mapError($response, $body);
         }
 
         return $this->awaitPublish($response->json('data.publish_id'), $direct);
@@ -312,9 +312,11 @@ class TikTokDriver extends AbstractPlatform
         // Layering: branded-content defaults are overridable by the user's extra
         // bag (e.g. to disclose a paid partnership), but the driver's computed
         // keys (title, privacy, the honoured disables) always win.
-        $defaults = ['brand_content_toggle' => false, 'brand_organic_toggle' => false];
-
-        return array_merge($defaults, $this->extraPayload($post), $computed);
+        // TikTok's own working video/init example omits the branded-content
+        // toggles, and sending them as false triggered invalid_params in
+        // practice. They are opt-in: disclose by adding them through extra(),
+        // e.g. extra: ['brand_content_toggle' => true].
+        return array_merge($this->extraPayload($post), $computed);
     }
 
     protected function draftPhotoInfo(PreparedPost $post): array
@@ -437,11 +439,15 @@ class TikTokDriver extends AbstractPlatform
         };
     }
 
-    protected function mapError($response): TemporaryException|PermanentException
+    protected function mapError($response, array $sent = []): TemporaryException|PermanentException
     {
         $code = (string) $response->json('error.code');
         $message = (string) ($response->json('error.message') ?: 'TikTok request failed.');
         $context = ['status' => $response->status(), 'error' => $response->json('error')];
+
+        if ($sent !== []) {
+            $context['sent'] = $sent;
+        }
 
         if ($response->status() === 429 || str_contains($code, 'rate_limit')) {
             return new TemporaryException('TikTok rate limit reached.', Platform::TikTok, FailureReason::RateLimited, 900, $context);
