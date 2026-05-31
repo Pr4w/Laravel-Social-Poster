@@ -159,11 +159,10 @@ class XDriver extends AbstractPlatform
             $path = $this->mediaPath($item);
             $size = @filesize($path) ?: 0;
 
-            $init = $this->command($post, [
-                'command' => 'INIT',
+            $init = $this->authed($post)->post($this->api.'/media/upload/initialize', [
+                'media_category' => $this->category($item),
                 'media_type' => $this->mime($item),
                 'total_bytes' => $size,
-                'media_category' => $this->category($item),
             ]);
 
             if (! $init->successful()) {
@@ -173,7 +172,7 @@ class XDriver extends AbstractPlatform
             $mediaId = (string) $init->json('data.id');
             $this->appendChunks($post, $mediaId, $path);
 
-            $finalize = $this->command($post, ['command' => 'FINALIZE', 'media_id' => $mediaId]);
+            $finalize = $this->authed($post)->post($this->api.'/media/upload/'.$mediaId.'/finalize');
 
             if (! $finalize->successful()) {
                 throw $this->mapError($finalize);
@@ -212,9 +211,7 @@ class XDriver extends AbstractPlatform
 
                 $response = $this->authed($post)
                     ->attach('media', $chunk, 'chunk')
-                    ->post($this->api.'/media/upload', [
-                        'command' => 'APPEND',
-                        'media_id' => $mediaId,
+                    ->post($this->api.'/media/upload/'.$mediaId.'/append', [
                         'segment_index' => $segment,
                     ]);
 
@@ -274,17 +271,6 @@ class XDriver extends AbstractPlatform
     protected function authed(PreparedPost $post)
     {
         return Http::withToken($this->token($post));
-    }
-
-    protected function command(PreparedPost $post, array $fields)
-    {
-        $parts = [];
-
-        foreach ($fields as $name => $value) {
-            $parts[] = ['name' => $name, 'contents' => (string) $value];
-        }
-
-        return $this->authed($post)->asMultipart()->post($this->api.'/media/upload', $parts);
     }
 
     protected function token(PreparedPost $post): string
