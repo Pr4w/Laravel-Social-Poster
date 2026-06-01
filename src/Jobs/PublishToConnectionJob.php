@@ -113,11 +113,11 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
             }
 
             if ($outcome instanceof Published) {
-                $events->dispatch(new PostPublished($outcome->result));
+                $events->dispatch(new PostPublished($outcome->result->withMetadata($this->post->metadata)));
             }
         } catch (TemporaryException $e) {
             if ($this->attempts() >= $this->tries) {
-                $events->dispatch(new PostFailed($this->platform, $e));
+                $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
                 $this->fail($e);
 
                 return;
@@ -125,7 +125,7 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
 
             $this->release($e->retryAfter ?? $this->backoffFor($this->attempts()));
         } catch (SocialPosterException $e) {
-            $events->dispatch(new PostFailed($this->platform, $e));
+            $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
             $this->fail($e);
         }
     }
@@ -139,7 +139,7 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
                 FailureReason::Timeout,
             );
 
-            $events->dispatch(new PostFailed($this->platform, $error));
+            $events->dispatch(new PostFailed($this->platform, $error, $this->post->metadata));
             $this->fail($error);
 
             return;

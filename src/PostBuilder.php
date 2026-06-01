@@ -48,6 +48,9 @@ class PostBuilder
 
     protected ?PlatformOptions $options = null;
 
+    /** @var array<string, mixed> */
+    protected array $metadata = [];
+
     protected bool $skipValidation = false;
 
     public function __construct(
@@ -100,6 +103,24 @@ class PostBuilder
     public function withOptions(PlatformOptions $options): static
     {
         $this->options = $options;
+
+        return $this;
+    }
+
+    /**
+     * Attach opaque correlation data to this post. The package never sends it to
+     * any platform; it rides back on the PostResult and on the PostQueued/
+     * PostFailed events so you can tie an outcome to your own records.
+     *
+     *   ->withMetadata(['scheduled_post_id' => 10])->post();
+     *
+     * Repeated calls merge.
+     *
+     * @param array<string, mixed> $metadata
+     */
+    public function withMetadata(array $metadata): static
+    {
+        $this->metadata = array_merge($this->metadata, $metadata);
 
         return $this;
     }
@@ -163,11 +184,11 @@ class PostBuilder
                 }
 
                 /** @var Published $outcome */
-                $result = $outcome->result;
+                $result = $outcome->result->withMetadata($post->metadata());
                 $this->events->dispatch(new PostPublished($result));
             } catch (SocialPosterException $e) {
-                $this->events->dispatch(new PostFailed($post->platform, $e));
-                $result = PostResult::failed($post->platform, $e);
+                $this->events->dispatch(new PostFailed($post->platform, $e, $post->metadata()));
+                $result = PostResult::failed($post->platform, $e)->withMetadata($post->metadata());
             }
 
             $results[$value] = $result;
@@ -193,7 +214,7 @@ class PostBuilder
             }
 
             dispatch($job);
-            $this->events->dispatch(new PostQueued($post->platform, $post->post));
+            $this->events->dispatch(new PostQueued($post->platform, $post->post, $post->metadata()));
         }
     }
 
@@ -202,7 +223,7 @@ class PostBuilder
      */
     protected function buildPrepared(bool $requireCredentials): array
     {
-        $post = new SocialPost($this->media, $this->caption, $this->title, $this->options);
+        $post = new SocialPost($this->media, $this->caption, $this->title, $this->options, $this->metadata);
         $map = [];
 
         foreach ($this->platforms as $platform) {

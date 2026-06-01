@@ -38,6 +38,12 @@ final class PreparedPost
         return $this->post->options;
     }
 
+    /** @return array<string, mixed> Opaque caller correlation data; never sent to the platform. */
+    public function metadata(): array
+    {
+        return $this->post->metadata;
+    }
+
     public function toArray(): array
     {
         return $this->post->toArray();

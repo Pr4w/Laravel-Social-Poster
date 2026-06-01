@@ -17,6 +17,7 @@ final class SocialPost
         public readonly ?string $caption = null,
         public readonly ?string $title = null,
         public readonly ?PlatformOptions $options = null,
+        public readonly array $metadata = [],
     ) {}
 
     public function toArray(): array
@@ -25,6 +26,7 @@ final class SocialPost
             'media' => $this->media,
             'caption' => $this->caption,
             'title' => $this->title,
+            'metadata' => $this->metadata,
         ];
     }
 }
