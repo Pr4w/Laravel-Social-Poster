@@ -16,6 +16,7 @@ use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\TemporaryException;
+use SocialPoster\Contracts\SupportsComments;
 use SocialPoster\Platforms\AbstractPlatform;
 use SocialPoster\ValueObjects\Media;
 use SocialPoster\ValueObjects\PostResult;
@@ -32,7 +33,7 @@ use SocialPoster\ValueObjects\PublishOutcome;
  * cards are intentionally out of scope: supply structured "little text" yourself
  * and set LinkedInOptions(escapeText: false) when you do.
  */
-class LinkedInDriver extends AbstractPlatform
+class LinkedInDriver extends AbstractPlatform implements SupportsComments
 {
     protected string $rest = 'https://api.linkedin.com/rest';
 
@@ -402,6 +403,22 @@ class LinkedInDriver extends AbstractPlatform
     protected function author(PreparedPost $post): string
     {
         return (string) $post->credentials->get('author');
+    }
+
+    public function comment(PreparedPost $context, string $postId, string $comment): ?string
+    {
+        // POST /socialActions/{shareUrn}/comments. The post urn is the share urn.
+        $response = $this->rest($context)->post('/socialActions/'.rawurlencode($postId).'/comments', [
+            'actor' => $this->author($context),
+            'object' => $postId,
+            'message' => ['text' => $comment],
+        ]);
+
+        if (! $response->successful()) {
+            throw $this->mapError($response);
+        }
+
+        return $this->foreignId($response) ?? $response->json('commentUrn') ?? $response->json('$URN');
     }
 
     protected function token(PreparedPost $post): string

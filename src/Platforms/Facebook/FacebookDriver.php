@@ -15,6 +15,7 @@ use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\TemporaryException;
+use SocialPoster\Contracts\SupportsComments;
 use SocialPoster\Platforms\AbstractPlatform;
 use SocialPoster\ValueObjects\Media;
 use SocialPoster\ValueObjects\PostResult;
@@ -29,7 +30,7 @@ use SocialPoster\ValueObjects\PublishOutcome;
  * and video stories upload, then hand off to resume() for the finish step rather
  * than blocking the worker.
  */
-class FacebookDriver extends AbstractPlatform
+class FacebookDriver extends AbstractPlatform implements SupportsComments
 {
     protected string $graph = 'https://graph.facebook.com/v23.0';
 
@@ -358,6 +359,20 @@ class FacebookDriver extends AbstractPlatform
     protected function token(PreparedPost $post): string
     {
         return (string) $post->credentials->get('page_access_token');
+    }
+
+    public function comment(PreparedPost $context, string $postId, string $comment): ?string
+    {
+        // POST /<PAGE_POST_ID>/comments with the Page token.
+        $response = $this->http($context)->post($this->graph.'/'.$postId.'/comments', [
+            'message' => $comment,
+        ]);
+
+        if (! $this->ok($response)) {
+            throw $this->mapError($response);
+        }
+
+        return $response->json('id');
     }
 
     protected function bytes(Media $media): string

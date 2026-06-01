@@ -6,19 +6,20 @@ Supported platforms: **Facebook, Instagram, Threads, LinkedIn, X, TikTok, YouTub
 
 ## Contents
 
--   [Install](#install)
--   [Quick start](#quick-start)
--   [The builder](#the-builder)
--   [Credentials](#credentials)
--   [Media](#media)
--   [Platform options](#platform-options)
--   [Extra parameters (the escape hatch)](#extra-parameters-the-escape-hatch)
--   [Correlation metadata](#correlation-metadata)
--   [Async publishing](#async-publishing)
--   [Validation and errors](#validation-and-errors)
--   [Media transfer: pull vs upload](#media-transfer-pull-vs-upload)
--   [Configuration](#configuration)
--   [Writing a driver](#writing-a-driver)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [The builder](#the-builder)
+- [Credentials](#credentials)
+- [Media](#media)
+- [Platform options](#platform-options)
+- [Extra parameters (the escape hatch)](#extra-parameters-the-escape-hatch)
+- [Correlation metadata](#correlation-metadata)
+- [First comments](#first-comments)
+- [Async publishing](#async-publishing)
+- [Validation and errors](#validation-and-errors)
+- [Media transfer: pull vs upload](#media-transfer-pull-vs-upload)
+- [Configuration](#configuration)
+- [Writing a driver](#writing-a-driver)
 
 ## Install
 
@@ -63,15 +64,16 @@ SocialPoster::on(...$platforms)   // 'instagram', or Platform::Instagram, variad
     ->title($title)               // platforms that use a title (YouTube, LinkedIn docs)
     ->withOptions($options)       // a PlatformOptions implementation, per platform
     ->withMetadata($data)         // opaque correlation data returned with the result
+    ->withComment($text)          // first comment, added after the post is live (supported platforms)
     ->withoutValidation()         // skip the local validation gate
     ->post();                     // terminal
 ```
 
-| Terminal     | Returns                             | Behaviour                                                          |
-| ------------ | ----------------------------------- | ------------------------------------------------------------------ |
-| `validate()` | `array<platform, ValidationResult>` | Runs validation only. Never throws. Frontend friendly.             |
-| `postNow()`  | `array<platform, PostResult>`       | Validates all-or-nothing, then publishes synchronously in-process. |
-| `post()`     | `void`                              | Validates, then queues one job per platform.                       |
+| Terminal | Returns | Behaviour |
+| --- | --- | --- |
+| `validate()` | `array<platform, ValidationResult>` | Runs validation only. Never throws. Frontend friendly. |
+| `postNow()` | `array<platform, PostResult>` | Validates all-or-nothing, then publishes synchronously in-process. |
+| `post()` | `void` | Validates, then queues one job per platform. |
 
 ```php
 $results = SocialPoster::on('instagram')->media($media)->caption($caption)->validate();
@@ -85,15 +87,15 @@ if ($results['instagram']->fails()) {
 
 Pass credentials per call with `->using()`, or set them in `config/social.php` under `platforms`. Token acquisition and refresh are out of scope: the package is a pure publishing engine and expects a current token.
 
-| Platform    | Required credentials                                |
-| ----------- | --------------------------------------------------- |
-| `facebook`  | `account_id` (Page ID), `page_access_token`         |
-| `instagram` | `account_id` (IG user ID), `access_token`           |
-| `threads`   | `account_id`, `access_token`                        |
-| `linkedin`  | `author` (e.g. `urn:li:person:...`), `access_token` |
-| `x`         | `access_token`                                      |
-| `tiktok`    | `access_token`                                      |
-| `youtube`   | `access_token`                                      |
+| Platform | Required credentials |
+| --- | --- |
+| `facebook` | `account_id` (Page ID), `page_access_token` |
+| `instagram` | `account_id` (IG user ID), `access_token` |
+| `threads` | `account_id`, `access_token` |
+| `linkedin` | `author` (e.g. `urn:li:person:...`), `access_token` |
+| `x` | `access_token` |
+| `tiktok` | `access_token` |
+| `youtube` | `access_token` |
 
 ```php
 use SocialPoster\ValueObjects\Credentials;
@@ -200,6 +202,34 @@ No package should mirror every vendor's full parameter surface. The long tail of
 
 Every typed options object accepts `extra`. Platforms without a typed class use `RawOptions`.
 
+### Instagram reels: common extras
+
+These are the fields people reach for most when creating a reel, merged into the `/media` container create. This is a convenience shortlist, not the full surface; the authoritative list is Meta's [IG User media reference](https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media#creating).
+
+| Key | Type | Notes |
+| --- | --- | --- |
+| `share_to_feed` | bool | Show the reel in the Feed tab as well as Reels. |
+| `collaborators` | array | Up to 3 Instagram usernames as collaborators. |
+| `user_tags` | array | `[{username, x, y}]` to tag users. |
+| `location_id` | string | Page ID of a location to tag. |
+| `audio_name` | string | Rename the reel's audio (once). |
+| `thumb_offset` | int | Cover frame in ms (ignored if a cover is set via `thumbnail`). |
+| `trial_params` | object | `{graduation_strategy: MANUAL\|SS_PERFORMANCE}` for trial reels. |
+| `is_paid_partnership` | bool | Show the paid-partnership label. |
+| `branded_content_sponsor_ids` | array | Up to 2 sponsor IG user IDs. |
+
+Note that `thumbnail` (the reel cover) is already a typed option on `InstagramOptions`, so reach for that rather than `cover_url`.
+
+```php
+->withOptions(new InstagramOptions(
+    extra: [
+        'share_to_feed' => true,
+        'collaborators' => ['laura', 'theo'],
+        'location_id'   => '123456789',
+    ],
+))
+```
+
 ### Instagram: trial reels
 
 ```php
@@ -301,7 +331,34 @@ public function handle(PostFailed $event): void
 
 `PostQueued` carries it too. It is kept separate from `PostResult->payload` (which is what the platform returned) so your keys can never collide with a platform's. Because it serializes into the queue payload for `post()`, keep it to scalars and arrays (ids, strings, flags), not Eloquent models or closures.
 
-## Async publishing
+## First comments
+
+`->withComment('text')` adds a first comment to a post, the common "link in the first comment" pattern. It runs as a separate step after the post is confirmed live, so the comment can never delay or fail the post itself.
+
+```php
+SocialPoster::on('instagram', 'linkedin')
+    ->using($creds)
+    ->media($image)
+    ->caption('New on the blog.')
+    ->withComment('Read it here: https://example.com/post')
+    ->withMetadata(['scheduled_post_id' => 10])
+    ->post();
+```
+
+Supported on Instagram, Facebook feed posts, and LinkedIn. On any other platform in the call (X, Threads, TikTok, YouTube) the comment is simply skipped, so the example above comments on Instagram and LinkedIn and does nothing on the rest. Outcomes arrive via their own events, which carry the same `metadata` so you can correlate them:
+
+```php
+use SocialPoster\Events\{CommentPublished, CommentFailed};
+
+public function handle(CommentPublished $event): void
+{
+    // $event->platform, $event->postId, $event->commentId, $event->metadata
+}
+```
+
+For `post()` the comment is a separate queued job dispatched once the post is live (after a small `comment_delay`, configurable). For `postNow()` it runs inline right after the post. TikTok is not included because its API has no endpoint to create comments.
+
+
 
 Many platforms process media asynchronously (TikTok, Instagram reels and carousels, LinkedIn video, X video, Facebook reels). The package models this without ever blocking a worker. YouTube, by contrast, returns the video id as soon as the upload completes, so it publishes synchronously.
 
@@ -328,11 +385,11 @@ $result->toArray();         // JSON friendly
 
 `postNow()` and the queued jobs throw three exceptions, keyed on how you should handle them. Each carries the `platform`, a `FailureReason`, and a `context` array.
 
-| Exception             | Meaning                | Extra                  |
-| --------------------- | ---------------------- | ---------------------- |
-| `ValidationException` | Local rules failed     | `errors` (MessageBag)  |
-| `TemporaryException`  | Transient; retry later | `retryAfter` (seconds) |
-| `PermanentException`  | Will not succeed as-is | —                      |
+| Exception | Meaning | Extra |
+| --- | --- | --- |
+| `ValidationException` | Local rules failed | `errors` (MessageBag) |
+| `TemporaryException` | Transient; retry later | `retryAfter` (seconds) |
+| `PermanentException` | Will not succeed as-is | — |
 
 `FailureReason` gives the granularity without an exception per case: `RateLimited`, `ServerError`, `Timeout`, `InvalidToken`, `InsufficientPermissions`, `AccountRestricted`, `MediaRejected`, `DuplicateContent`, `Unknown`.
 
@@ -352,9 +409,9 @@ try {
 
 Platforms either pull media from a public URL or have bytes uploaded to them. The `MediaGateway` resolves this so drivers never care.
 
--   **Pull (Facebook, Instagram, Threads):** you must hand a publicly reachable URL. A local file fails validation early with a clear message.
--   **Upload (LinkedIn, X, YouTube):** local files and remote URLs both work; remote is downloaded to a temp file and pushed as bytes.
--   **Both (TikTok):** a public URL uses `PULL_FROM_URL`; a local filesystem path uses chunked `FILE_UPLOAD`. Note that `Storage::disk('public')->url('clip.mp4')` is still a URL (pull, needs a verified domain), whereas `Storage::disk('public')->path('clip.mp4')` is a local path (upload, no domain check). TikTok photos are pull-only.
+- **Pull (Facebook, Instagram, Threads):** you must hand a publicly reachable URL. A local file fails validation early with a clear message.
+- **Upload (LinkedIn, X, YouTube):** local files and remote URLs both work; remote is downloaded to a temp file and pushed as bytes.
+- **Both (TikTok):** a public URL uses `PULL_FROM_URL`; a local filesystem path uses chunked `FILE_UPLOAD`. Note that `Storage::disk('public')->url('clip.mp4')` is still a URL (pull, needs a verified domain), whereas `Storage::disk('public')->path('clip.mp4')` is a local path (upload, no domain check). TikTok photos are pull-only.
 
 The default `LocalMediaGateway` passes remote URLs through and downloads them when bytes are needed. Bind your own gateway (for example to sign or publish local files) in the config.
 

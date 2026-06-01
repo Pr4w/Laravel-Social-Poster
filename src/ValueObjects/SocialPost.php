@@ -18,6 +18,7 @@ final class SocialPost
         public readonly ?string $title = null,
         public readonly ?PlatformOptions $options = null,
         public readonly array $metadata = [],
+        public readonly ?string $comment = null,
     ) {}
 
     public function toArray(): array

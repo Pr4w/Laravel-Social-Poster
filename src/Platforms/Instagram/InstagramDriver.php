@@ -15,6 +15,7 @@ use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\TemporaryException;
+use SocialPoster\Contracts\SupportsComments;
 use SocialPoster\Platforms\AbstractPlatform;
 use SocialPoster\ValueObjects\Media;
 use SocialPoster\ValueObjects\PostResult;
@@ -30,7 +31,7 @@ use SocialPoster\ValueObjects\PublishOutcome;
  * ready" subcode (2207027) becomes a long Pending rather than a separate job,
  * which is what the original UploadMediaInstagramDelayedPublication handled.
  */
-class InstagramDriver extends AbstractPlatform
+class InstagramDriver extends AbstractPlatform implements SupportsComments
 {
     protected string $graph = 'https://graph.facebook.com/v23.0';
 
@@ -307,6 +308,20 @@ class InstagramDriver extends AbstractPlatform
     protected function token(PreparedPost $post): string
     {
         return (string) $post->credentials->get('access_token');
+    }
+
+    public function comment(PreparedPost $context, string $postId, string $comment): ?string
+    {
+        // POST /<IG_MEDIA_ID>/comments — the published media id is the post id.
+        $response = $this->http($context)->post($this->graph.'/'.$postId.'/comments', [
+            'message' => $comment,
+        ]);
+
+        if (! $this->ok($response)) {
+            throw $this->mapError($response);
+        }
+
+        return $response->json('id');
     }
 
     protected function edge(PreparedPost $post, string $path): string

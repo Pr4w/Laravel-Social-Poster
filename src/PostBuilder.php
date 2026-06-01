@@ -6,8 +6,11 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Contracts\PlatformOptions;
 use SocialPoster\Contracts\SocialPlatform;
+use SocialPoster\Contracts\SupportsComments;
 use SocialPoster\Enums\FailureReason;
 use SocialPoster\Enums\Platform;
+use SocialPoster\Events\CommentFailed;
+use SocialPoster\Events\CommentPublished;
 use SocialPoster\Events\PostFailed;
 use SocialPoster\Events\PostPublished;
 use SocialPoster\Events\PostQueued;
@@ -50,6 +53,8 @@ class PostBuilder
 
     /** @var array<string, mixed> */
     protected array $metadata = [];
+
+    protected ?string $comment = null;
 
     protected bool $skipValidation = false;
 
@@ -125,6 +130,19 @@ class PostBuilder
         return $this;
     }
 
+    /**
+     * Add a first comment, posted as a separate step once the post is live. Takes
+     * effect only on platforms that support commenting (Instagram, Facebook feed
+     * posts, LinkedIn); it is skipped elsewhere. Outcomes arrive via the
+     * CommentPublished / CommentFailed events.
+     */
+    public function withComment(?string $comment): static
+    {
+        $this->comment = $comment;
+
+        return $this;
+    }
+
     public function withoutValidation(): static
     {
         $this->skipValidation = true;
@@ -186,6 +204,7 @@ class PostBuilder
                 /** @var Published $outcome */
                 $result = $outcome->result->withMetadata($post->metadata());
                 $this->events->dispatch(new PostPublished($result));
+                $this->commentInline($driver, $post, $result);
             } catch (SocialPosterException $e) {
                 $this->events->dispatch(new PostFailed($post->platform, $e, $post->metadata()));
                 $result = PostResult::failed($post->platform, $e)->withMetadata($post->metadata());
@@ -223,7 +242,7 @@ class PostBuilder
      */
     protected function buildPrepared(bool $requireCredentials): array
     {
-        $post = new SocialPost($this->media, $this->caption, $this->title, $this->options, $this->metadata);
+        $post = new SocialPost($this->media, $this->caption, $this->title, $this->options, $this->metadata, $this->comment);
         $map = [];
 
         foreach ($this->platforms as $platform) {
@@ -254,6 +273,22 @@ class PostBuilder
 
         if ($combined->isNotEmpty()) {
             throw new ValidationException('Content failed validation before posting.', $combined);
+        }
+    }
+
+    protected function commentInline(SocialPlatform $driver, PreparedPost $post, PostResult $result): void
+    {
+        $comment = $post->comment();
+
+        if ($comment === null || $result->platformPostId === null || ! $driver instanceof SupportsComments) {
+            return;
+        }
+
+        try {
+            $commentId = $driver->comment($post, $result->platformPostId, $comment);
+            $this->events->dispatch(new CommentPublished($post->platform, $result->platformPostId, $commentId, $post->metadata()));
+        } catch (SocialPosterException $e) {
+            $this->events->dispatch(new CommentFailed($post->platform, $result->platformPostId, $e, $post->metadata()));
         }
     }
 

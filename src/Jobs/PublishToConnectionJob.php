@@ -113,7 +113,9 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
             }
 
             if ($outcome instanceof Published) {
-                $events->dispatch(new PostPublished($outcome->result->withMetadata($this->post->metadata)));
+                $result = $outcome->result->withMetadata($this->post->metadata);
+                $events->dispatch(new PostPublished($result));
+                $this->dispatchComment($driver, $result);
             }
         } catch (TemporaryException $e) {
             if ($this->attempts() >= $this->tries) {
@@ -127,6 +129,29 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
         } catch (SocialPosterException $e) {
             $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
             $this->fail($e);
+        }
+    }
+
+    protected function dispatchComment(\SocialPoster\Contracts\SocialPlatform $driver, \SocialPoster\ValueObjects\PostResult $result): void
+    {
+        $comment = $this->post->comment;
+
+        if ($comment === null || $result->platformPostId === null || ! $driver instanceof \SocialPoster\Contracts\SupportsComments) {
+            return;
+        }
+
+        $delay = (int) (config('social.comment_delay', 10));
+
+        $job = AddFirstCommentJob::dispatch(
+            $this->platform,
+            $result->platformPostId,
+            $comment,
+            $this->credentials,
+            $this->post->metadata,
+        )->delay(now()->addSeconds(max(0, $delay)));
+
+        if (! empty($this->queue)) {
+            $job->onQueue($this->queue);
         }
     }
 

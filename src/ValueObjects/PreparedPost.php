@@ -44,6 +44,11 @@ final class PreparedPost
         return $this->post->metadata;
     }
 
+    public function comment(): ?string
+    {
+        return $this->post->comment;
+    }
+
     public function toArray(): array
     {
         return $this->post->toArray();

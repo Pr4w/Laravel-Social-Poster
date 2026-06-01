@@ -10,6 +10,10 @@ return [
     // Queue name for the publish jobs. Null uses the default queue.
     'queue' => env('SOCIAL_QUEUE'),
 
+    // Seconds to wait after a post is live before adding its first comment,
+    // giving the platform a moment to make the new post commentable.
+    'comment_delay' => env('SOCIAL_COMMENT_DELAY', 10),
+
     // Reads media metadata for the deep validation checks.
     'inspector' => SocialPoster\Inspectors\FFProbeInspector::class,
 
@@ -26,6 +30,7 @@ return [
         Platform::Threads->value => SocialPoster\Platforms\Threads\ThreadsDriver::class,
         Platform::X->value => SocialPoster\Platforms\X\XDriver::class,
         Platform::TikTok->value => SocialPoster\Platforms\TikTok\TikTokDriver::class,
+        Platform::YouTube->value => SocialPoster\Platforms\YouTube\YouTubeDriver::class,
     ],
 
     // Static, single-account credentials per platform. Omit and pass credentials
