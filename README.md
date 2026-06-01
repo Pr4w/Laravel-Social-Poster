@@ -2,7 +2,7 @@
 
 A cleanly architected Laravel package for publishing photos, videos, and documents to multiple social platforms behind one fluent API. You describe the post once; each platform driver handles its own validation, media transfer, async processing, and error mapping.
 
-Supported platforms: **Facebook, Instagram, Threads, LinkedIn, X, TikTok.**
+Supported platforms: **Facebook, Instagram, Threads, LinkedIn, X, TikTok, YouTube.**
 
 ## Contents
 
@@ -13,6 +13,7 @@ Supported platforms: **Facebook, Instagram, Threads, LinkedIn, X, TikTok.**
 -   [Media](#media)
 -   [Platform options](#platform-options)
 -   [Extra parameters (the escape hatch)](#extra-parameters-the-escape-hatch)
+-   [Correlation metadata](#correlation-metadata)
 -   [Async publishing](#async-publishing)
 -   [Validation and errors](#validation-and-errors)
 -   [Media transfer: pull vs upload](#media-transfer-pull-vs-upload)
@@ -22,11 +23,11 @@ Supported platforms: **Facebook, Instagram, Threads, LinkedIn, X, TikTok.**
 ## Install
 
 ```bash
-composer require vendor/social-poster
+composer require pr4w/laravel-social-poster
 php artisan vendor:publish --tag=social-poster-config
 ```
 
-The placeholder namespace is `SocialPoster\` and the composer name is `vendor/social-poster`. Set your own vendor in `composer.json` and find/replace the namespace if you want it branded.
+The package namespace is `SocialPoster\`.
 
 ## Quick start
 
@@ -59,8 +60,9 @@ SocialPoster::on(...$platforms)   // 'instagram', or Platform::Instagram, variad
     ->using($credentials)         // optional; falls back to config credentials
     ->media(...$media)            // string URLs/paths or Media objects, variadic
     ->caption($caption)
-    ->title($title)               // platforms that use a title (LinkedIn docs, etc.)
+    ->title($title)               // platforms that use a title (YouTube, LinkedIn docs)
     ->withOptions($options)       // a PlatformOptions implementation, per platform
+    ->withMetadata($data)         // opaque correlation data returned with the result
     ->withoutValidation()         // skip the local validation gate
     ->post();                     // terminal
 ```
@@ -91,6 +93,7 @@ Pass credentials per call with `->using()`, or set them in `config/social.php` u
 | `linkedin`  | `author` (e.g. `urn:li:person:...`), `access_token` |
 | `x`         | `access_token`                                      |
 | `tiktok`    | `access_token`                                      |
+| `youtube`   | `access_token`                                      |
 
 ```php
 use SocialPoster\ValueObjects\Credentials;
@@ -125,7 +128,7 @@ Typed options are reserved for knobs that are structural, required by the API, o
 use SocialPoster\Platforms\Instagram\InstagramOptions;
 
 ->withOptions(new InstagramOptions(
-    isStory: true,                                  // post as a story
+    isStory: true,                                    // post as a story
     thumbnail: Media::image('https://.../cover.jpg'), // reel cover
 ))
 ```
@@ -163,13 +166,37 @@ use SocialPoster\Platforms\TikTok\{TikTokOptions, TikTokTarget, TikTokPrivacy};
 
 `TikTokPrivacy`: `PublicToEveryone`, `MutualFollowFriends`, `FollowerOfCreator`, `SelfOnly`. The level you choose is validated against what the creator actually permits.
 
+### YouTube
+
+YouTube uploads one video. The builder's `->title()` becomes the video title (required, max 100) and `->caption()` becomes the description (max 5000), since YouTube has both fields. An optional thumbnail is set after the upload and never fails the post; if it can't be set (for example the channel is not eligible for custom thumbnails) the reason lands in `PostResult->payload['thumbnail_warning']`.
+
+```php
+use SocialPoster\Platforms\YouTube\{YouTubeOptions, YouTubePrivacy};
+
+SocialPoster::on('youtube')
+    ->using($creds)
+    ->media(Media::video('https://cdn.example.com/episode.mp4'))
+    ->title('Vive la Vie, Episode 1')
+    ->caption("The full description goes here.")
+    ->withOptions(new YouTubeOptions(
+        privacyStatus: YouTubePrivacy::Unlisted, // default is Public
+        tags: ['paris', 'piano'],
+        categoryId: '22',                        // People & Blogs (default)
+        madeForKids: false,
+        thumbnail: Media::image('https://cdn.example.com/cover.jpg'),
+    ))
+    ->post();
+```
+
+`YouTubePrivacy`: `Public`, `Unlisted`, `Private`. Community posts are not supported, since the Data API exposes no endpoint to create them.
+
 ### X / Threads
 
 X and Threads have no typed options of their own. Use `RawOptions` to bind a raw payload to them (see below).
 
 ## Extra parameters (the escape hatch)
 
-No package should mirror every vendor's full parameter surface. The long tail of platform fields (Instagram trial reels, X reply settings, TikTok disclosure flags, and whatever ships next quarter) flows through one `extra` bag that the driver merges into its post-level create request. Anything in `extra` is unvalidated by design, and driver-computed keys always win on collision, so the hatch can add fields but never quietly override what the driver already decided.
+No package should mirror every vendor's full parameter surface. The long tail of platform fields (Instagram trial reels, X reply settings, TikTok disclosure flags, YouTube scheduling, and whatever ships next quarter) flows through one `extra` bag that the driver merges into its post-level create request. Anything in `extra` is unvalidated by design, and driver-computed keys always win on collision, so the hatch can add fields but never quietly override what the driver already decided.
 
 Every typed options object accepts `extra`. Platforms without a typed class use `RawOptions`.
 
@@ -205,7 +232,7 @@ use SocialPoster\Enums\Platform;
 
 ### TikTok: branded content disclosure and AI labelling
 
-For TikTok the bag merges into `post_info`, which is where its tweakable fields live. Disclosure defaults to off but `extra` can turn it on.
+For TikTok the bag merges into `post_info`, which is where its tweakable fields live.
 
 ```php
 ->withOptions(new TikTokOptions(
@@ -215,6 +242,17 @@ For TikTok the bag merges into `post_info`, which is where its tweakable fields 
         'brand_content_toggle' => true,  // paid partnership
         'is_aigc'              => true,  // label as AI-generated
     ],
+))
+```
+
+### YouTube: schedule a publish
+
+For YouTube the bag deep-merges into the matching `snippet` or `status` sub-object, so you can add fields without clobbering the rest. A scheduled publish requires a private video.
+
+```php
+->withOptions(new YouTubeOptions(
+    privacyStatus: YouTubePrivacy::Private,
+    extra: ['status' => ['publishAt' => '2026-07-01T09:00:00Z']],
 ))
 ```
 
@@ -231,9 +269,41 @@ use SocialPoster\Platforms\Facebook\FacebookOptions;
 ))
 ```
 
+## Correlation metadata
+
+`extra` goes out to the platform. `withMetadata()` is its mirror image: opaque data that never leaves the package and rides back to you, so you can tie an outcome to whatever you track internally (a scheduled post id, a job uuid, a batch tag).
+
+```php
+SocialPoster::on('instagram', 'youtube')
+    ->using($creds)
+    ->media($video)
+    ->title('Episode 1')
+    ->caption('...')
+    ->withMetadata(['scheduled_post_id' => 10])
+    ->post();
+```
+
+It comes back on every outcome. `postNow()` returns results with it attached on success and failure, and the queued path carries it through job serialization onto the events, including a failure deep in the async resume loop.
+
+```php
+public function handle(PostPublished $event): void
+{
+    $id = $event->result->metadata['scheduled_post_id'] ?? null;
+    // mark scheduled post #10 published; store $event->result->platformPostId
+}
+
+public function handle(PostFailed $event): void
+{
+    $id = $event->metadata['scheduled_post_id'] ?? null;
+    // mark scheduled post #10 failed; log $event->exception->reason
+}
+```
+
+`PostQueued` carries it too. It is kept separate from `PostResult->payload` (which is what the platform returned) so your keys can never collide with a platform's. Because it serializes into the queue payload for `post()`, keep it to scalars and arrays (ids, strings, flags), not Eloquent models or closures.
+
 ## Async publishing
 
-Many platforms process media asynchronously (TikTok, Instagram reels and carousels, LinkedIn video, X video, Facebook reels). The package models this without ever blocking a worker.
+Many platforms process media asynchronously (TikTok, Instagram reels and carousels, LinkedIn video, X video, Facebook reels). The package models this without ever blocking a worker. YouTube, by contrast, returns the video id as soon as the upload completes, so it publishes synchronously.
 
 A driver's `publish()` returns either a finished result or a `Pending` state with a recheck delay. When pending, the queued job re-dispatches itself with a delay, carrying the state, and calls `resume()` until the post completes. Synchronous platforms simply return finished and never implement `resume()`.
 
@@ -242,7 +312,7 @@ A driver's `publish()` returns either a finished result or a `Pending` state wit
 ```php
 use SocialPoster\Events\{PostQueued, PostPublished, PostFailed};
 
-// PostPublished carries a PostResult; PostFailed carries the platform and exception.
+// PostPublished carries a PostResult; PostFailed carries the platform, exception, and metadata.
 ```
 
 ## Validation and errors
@@ -283,7 +353,7 @@ try {
 Platforms either pull media from a public URL or have bytes uploaded to them. The `MediaGateway` resolves this so drivers never care.
 
 -   **Pull (Facebook, Instagram, Threads):** you must hand a publicly reachable URL. A local file fails validation early with a clear message.
--   **Upload (LinkedIn, X):** local files and remote URLs both work; remote is downloaded to a temp file and pushed as bytes.
+-   **Upload (LinkedIn, X, YouTube):** local files and remote URLs both work; remote is downloaded to a temp file and pushed as bytes.
 -   **Both (TikTok):** a public URL uses `PULL_FROM_URL`; a local filesystem path uses chunked `FILE_UPLOAD`. Note that `Storage::disk('public')->url('clip.mp4')` is still a URL (pull, needs a verified domain), whereas `Storage::disk('public')->path('clip.mp4')` is a local path (upload, no domain check). TikTok photos are pull-only.
 
 The default `LocalMediaGateway` passes remote URLs through and downloads them when bytes are needed. Bind your own gateway (for example to sign or publish local files) in the config.
