@@ -6,20 +6,21 @@ Supported platforms: **Facebook, Instagram, Threads, LinkedIn, X, TikTok, YouTub
 
 ## Contents
 
-- [Install](#install)
-- [Quick start](#quick-start)
-- [The builder](#the-builder)
-- [Credentials](#credentials)
-- [Media](#media)
-- [Platform options](#platform-options)
-- [Extra parameters (the escape hatch)](#extra-parameters-the-escape-hatch)
-- [Correlation metadata](#correlation-metadata)
-- [First comments](#first-comments)
-- [Async publishing](#async-publishing)
-- [Validation and errors](#validation-and-errors)
-- [Media transfer: pull vs upload](#media-transfer-pull-vs-upload)
-- [Configuration](#configuration)
-- [Writing a driver](#writing-a-driver)
+-   [Install](#install)
+-   [Quick start](#quick-start)
+-   [The builder](#the-builder)
+-   [Credentials](#credentials)
+-   [Media](#media)
+-   [Platform options](#platform-options)
+-   [Extra parameters (the escape hatch)](#extra-parameters-the-escape-hatch)
+-   [Correlation metadata](#correlation-metadata)
+-   [First comments](#first-comments)
+-   [Async publishing](#async-publishing)
+-   [Idempotency and duplicate protection](#idempotency-and-duplicate-protection)
+-   [Validation and errors](#validation-and-errors)
+-   [Media transfer: pull vs upload](#media-transfer-pull-vs-upload)
+-   [Configuration](#configuration)
+-   [Writing a driver](#writing-a-driver)
 
 ## Install
 
@@ -69,11 +70,11 @@ SocialPoster::on(...$platforms)   // 'instagram', or Platform::Instagram, variad
     ->post();                     // terminal
 ```
 
-| Terminal | Returns | Behaviour |
-| --- | --- | --- |
-| `validate()` | `array<platform, ValidationResult>` | Runs validation only. Never throws. Frontend friendly. |
-| `postNow()` | `array<platform, PostResult>` | Validates all-or-nothing, then publishes synchronously in-process. |
-| `post()` | `void` | Validates, then queues one job per platform. |
+| Terminal     | Returns                             | Behaviour                                                          |
+| ------------ | ----------------------------------- | ------------------------------------------------------------------ |
+| `validate()` | `array<platform, ValidationResult>` | Runs validation only. Never throws. Frontend friendly.             |
+| `postNow()`  | `array<platform, PostResult>`       | Validates all-or-nothing, then publishes synchronously in-process. |
+| `post()`     | `void`                              | Validates, then queues one job per platform.                       |
 
 ```php
 $results = SocialPoster::on('instagram')->media($media)->caption($caption)->validate();
@@ -87,15 +88,15 @@ if ($results['instagram']->fails()) {
 
 Pass credentials per call with `->using()`, or set them in `config/social.php` under `platforms`. Token acquisition and refresh are out of scope: the package is a pure publishing engine and expects a current token.
 
-| Platform | Required credentials |
-| --- | --- |
-| `facebook` | `account_id` (Page ID), `page_access_token` |
-| `instagram` | `account_id` (IG user ID), `access_token` |
-| `threads` | `account_id`, `access_token` |
-| `linkedin` | `author` (e.g. `urn:li:person:...`), `access_token` |
-| `x` | `access_token` |
-| `tiktok` | `access_token` |
-| `youtube` | `access_token` |
+| Platform    | Required credentials                                |
+| ----------- | --------------------------------------------------- |
+| `facebook`  | `account_id` (Page ID), `page_access_token`         |
+| `instagram` | `account_id` (IG user ID), `access_token`           |
+| `threads`   | `account_id`, `access_token`                        |
+| `linkedin`  | `author` (e.g. `urn:li:person:...`), `access_token` |
+| `x`         | `access_token`                                      |
+| `tiktok`    | `access_token`                                      |
+| `youtube`   | `access_token`                                      |
 
 ```php
 use SocialPoster\ValueObjects\Credentials;
@@ -206,17 +207,17 @@ Every typed options object accepts `extra`. Platforms without a typed class use 
 
 These are the fields people reach for most when creating a reel, merged into the `/media` container create. This is a convenience shortlist, not the full surface; the authoritative list is Meta's [IG User media reference](https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media#creating).
 
-| Key | Type | Notes |
-| --- | --- | --- |
-| `share_to_feed` | bool | Show the reel in the Feed tab as well as Reels. |
-| `collaborators` | array | Up to 3 Instagram usernames as collaborators. |
-| `user_tags` | array | `[{username, x, y}]` to tag users. |
-| `location_id` | string | Page ID of a location to tag. |
-| `audio_name` | string | Rename the reel's audio (once). |
-| `thumb_offset` | int | Cover frame in ms (ignored if a cover is set via `thumbnail`). |
-| `trial_params` | object | `{graduation_strategy: MANUAL\|SS_PERFORMANCE}` for trial reels. |
-| `is_paid_partnership` | bool | Show the paid-partnership label. |
-| `branded_content_sponsor_ids` | array | Up to 2 sponsor IG user IDs. |
+| Key                           | Type   | Notes                                                            |
+| ----------------------------- | ------ | ---------------------------------------------------------------- |
+| `share_to_feed`               | bool   | Show the reel in the Feed tab as well as Reels.                  |
+| `collaborators`               | array  | Up to 3 Instagram usernames as collaborators.                    |
+| `user_tags`                   | array  | `[{username, x, y}]` to tag users.                               |
+| `location_id`                 | string | Page ID of a location to tag.                                    |
+| `audio_name`                  | string | Rename the reel's audio (once).                                  |
+| `thumb_offset`                | int    | Cover frame in ms (ignored if a cover is set via `thumbnail`).   |
+| `trial_params`                | object | `{graduation_strategy: MANUAL\|SS_PERFORMANCE}` for trial reels. |
+| `is_paid_partnership`         | bool   | Show the paid-partnership label.                                 |
+| `branded_content_sponsor_ids` | array  | Up to 2 sponsor IG user IDs.                                     |
 
 Note that `thumbnail` (the reel cover) is already a typed option on `InstagramOptions`, so reach for that rather than `cover_url`.
 
@@ -358,8 +359,6 @@ public function handle(CommentPublished $event): void
 
 For `post()` the comment is a separate queued job dispatched once the post is live (after a small `comment_delay`, configurable). For `postNow()` it runs inline right after the post. TikTok is not included because its API has no endpoint to create comments.
 
-
-
 Many platforms process media asynchronously (TikTok, Instagram reels and carousels, LinkedIn video, X video, Facebook reels). The package models this without ever blocking a worker. YouTube, by contrast, returns the video id as soon as the upload completes, so it publishes synchronously.
 
 A driver's `publish()` returns either a finished result or a `Pending` state with a recheck delay. When pending, the queued job re-dispatches itself with a delay, carrying the state, and calls `resume()` until the post completes. Synchronous platforms simply return finished and never implement `resume()`.
@@ -371,6 +370,32 @@ use SocialPoster\Events\{PostQueued, PostPublished, PostFailed};
 
 // PostPublished carries a PostResult; PostFailed carries the platform, exception, and metadata.
 ```
+
+## Idempotency and duplicate protection
+
+The queue guarantees at-least-once delivery of the publish job, which is what you want, but it means a job can be retried after its publish call already succeeded on the platform (worker killed, timeout reading the response, a deploy mid-flight), and the retry would post again. No native queue feature can prevent this, because the duplicate happens inside one job's retry cycle and the already-created post lives on the platform, outside Laravel. Social APIs do not offer idempotency keys for content creation, so the package keeps the record itself.
+
+By default nothing is remembered and behaviour is unchanged. To turn on protection, point the store at the database and publish its migration:
+
+```php
+// config/social.php
+'idempotency' => SocialPoster\Idempotency\DatabaseIdempotencyStore::class,
+```
+
+```bash
+php artisan vendor:publish --tag=social-poster-migrations
+php artisan migrate
+```
+
+With it enabled, a retry of an already-published post replays the recorded result instead of posting again, and a retry of an interrupted async upload resumes from the saved state rather than re-creating. Each `post()` call gets a stable key per platform; tie it to your own identifier so two separate calls for the same record never double-post:
+
+```php
+SocialPoster::on('instagram')->media($m)->caption('...')
+    ->idempotencyKey('schedule:10')
+    ->post();
+```
+
+One honest limit: a crash in the narrow window between the platform call returning and the store writing cannot be fully closed without platform-side idempotency keys, which these APIs do not provide. The store shrinks the risk from "every retry re-posts" to that fraction-of-a-second window. This protection covers the queued `post()` path; `postNow()` runs once in-process and is not subject to queue retries.
 
 ## Validation and errors
 
@@ -385,11 +410,11 @@ $result->toArray();         // JSON friendly
 
 `postNow()` and the queued jobs throw three exceptions, keyed on how you should handle them. Each carries the `platform`, a `FailureReason`, and a `context` array.
 
-| Exception | Meaning | Extra |
-| --- | --- | --- |
-| `ValidationException` | Local rules failed | `errors` (MessageBag) |
-| `TemporaryException` | Transient; retry later | `retryAfter` (seconds) |
-| `PermanentException` | Will not succeed as-is | — |
+| Exception             | Meaning                | Extra                  |
+| --------------------- | ---------------------- | ---------------------- |
+| `ValidationException` | Local rules failed     | `errors` (MessageBag)  |
+| `TemporaryException`  | Transient; retry later | `retryAfter` (seconds) |
+| `PermanentException`  | Will not succeed as-is | —                      |
 
 `FailureReason` gives the granularity without an exception per case: `RateLimited`, `ServerError`, `Timeout`, `InvalidToken`, `InsufficientPermissions`, `AccountRestricted`, `MediaRejected`, `DuplicateContent`, `Unknown`.
 
@@ -409,9 +434,9 @@ try {
 
 Platforms either pull media from a public URL or have bytes uploaded to them. The `MediaGateway` resolves this so drivers never care.
 
-- **Pull (Facebook, Instagram, Threads):** you must hand a publicly reachable URL. A local file fails validation early with a clear message.
-- **Upload (LinkedIn, X, YouTube):** local files and remote URLs both work; remote is downloaded to a temp file and pushed as bytes.
-- **Both (TikTok):** a public URL uses `PULL_FROM_URL`; a local filesystem path uses chunked `FILE_UPLOAD`. Note that `Storage::disk('public')->url('clip.mp4')` is still a URL (pull, needs a verified domain), whereas `Storage::disk('public')->path('clip.mp4')` is a local path (upload, no domain check). TikTok photos are pull-only.
+-   **Pull (Facebook, Instagram, Threads):** you must hand a publicly reachable URL. A local file fails validation early with a clear message.
+-   **Upload (LinkedIn, X, YouTube):** local files and remote URLs both work; remote is downloaded to a temp file and pushed as bytes.
+-   **Both (TikTok):** a public URL uses `PULL_FROM_URL`; a local filesystem path uses chunked `FILE_UPLOAD`. Note that `Storage::disk('public')->url('clip.mp4')` is still a URL (pull, needs a verified domain), whereas `Storage::disk('public')->path('clip.mp4')` is a local path (upload, no domain check). TikTok photos are pull-only.
 
 The default `LocalMediaGateway` passes remote URLs through and downloads them when bytes are needed. Bind your own gateway (for example to sign or publish local files) in the config.
 

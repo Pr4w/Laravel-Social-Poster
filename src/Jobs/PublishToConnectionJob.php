@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use SocialPoster\Enums\FailureReason;
+use SocialPoster\Contracts\IdempotencyStore;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Events\PostFailed;
 use SocialPoster\Events\PostPublished;
@@ -74,7 +75,11 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
 
     public function uniqueId(): string
     {
-        return $this->correlationId ?? $this->contentKey();
+        // Per platform: a shared correlation id across a fan-out must not collide.
+        // contentKey() already includes the platform.
+        return $this->correlationId !== null
+            ? $this->correlationId.':'.$this->platform->value
+            : $this->contentKey();
     }
 
     protected function contentKey(): string
@@ -88,13 +93,29 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
         ]));
     }
 
-    public function handle(SocialManager $platforms, Dispatcher $events): void
+    public function handle(SocialManager $platforms, Dispatcher $events, IdempotencyStore $idempotency): void
     {
         $driver = $platforms->driver($this->platform->value);
         $prepared = new PreparedPost($this->platform, $this->post, $this->credentials);
+        $key = $this->uniqueId();
+
+        // Already published on a prior attempt: replay, never post again.
+        $prior = $idempotency->completed($key);
+
+        if ($prior !== null) {
+            $result = $prior->withMetadata($this->post->metadata);
+            $events->dispatch(new PostPublished($result));
+            $this->dispatchComment($driver, $result);
+
+            return;
+        }
+
+        // Resume from the persisted async state if a crashed attempt left one,
+        // so the upload is continued rather than re-created.
+        $state = $this->state ?? $idempotency->pendingState($key);
 
         try {
-            if ($this->state === null && ! $this->skipValidation) {
+            if ($state === null && ! $this->skipValidation) {
                 $errors = $driver->validate($prepared);
 
                 if ($errors->isNotEmpty()) {
@@ -102,23 +123,26 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
                 }
             }
 
-            $outcome = $this->state === null
+            $outcome = $state === null
                 ? $driver->publish($prepared)
-                : $driver->resume($prepared, $this->state);
+                : $driver->resume($prepared, $state);
 
             if ($outcome instanceof Pending) {
+                $idempotency->markPending($key, $outcome->state);
                 $this->scheduleContinuation($outcome, $events);
 
                 return;
             }
 
             if ($outcome instanceof Published) {
+                $idempotency->markPublished($key, $outcome->result);
                 $result = $outcome->result->withMetadata($this->post->metadata);
                 $events->dispatch(new PostPublished($result));
                 $this->dispatchComment($driver, $result);
             }
         } catch (TemporaryException $e) {
             if ($this->attempts() >= $this->tries) {
+                $idempotency->forget($key);
                 $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
                 $this->fail($e);
 
@@ -127,6 +151,7 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
 
             $this->release($e->retryAfter ?? $this->backoffFor($this->attempts()));
         } catch (SocialPosterException $e) {
+            $idempotency->forget($key);
             $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
             $this->fail($e);
         }

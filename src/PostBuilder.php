@@ -4,6 +4,7 @@ namespace SocialPoster;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MessageBag;
+use Illuminate\Support\Str;
 use SocialPoster\Contracts\PlatformOptions;
 use SocialPoster\Contracts\SocialPlatform;
 use SocialPoster\Contracts\SupportsComments;
@@ -55,6 +56,8 @@ class PostBuilder
     protected array $metadata = [];
 
     protected ?string $comment = null;
+
+    protected ?string $idempotencyKey = null;
 
     protected bool $skipValidation = false;
 
@@ -143,6 +146,19 @@ class PostBuilder
         return $this;
     }
 
+    /**
+     * Set a stable idempotency key for this post, tying duplicate protection to
+     * your own identifier (e.g. "schedule:10"). Two ->post() calls with the same
+     * key will not double-publish when the database idempotency store is enabled.
+     * Defaults to a fresh key per call.
+     */
+    public function idempotencyKey(string $key): static
+    {
+        $this->idempotencyKey = $key;
+
+        return $this;
+    }
+
     public function withoutValidation(): static
     {
         $this->skipValidation = true;
@@ -224,9 +240,22 @@ class PostBuilder
 
         $queue = $this->config['queue'] ?? null;
 
+        // One stable key per ->post() call, shared across platforms (the job makes
+        // it per-platform). Retries of a dispatched job reuse it; a separate
+        // ->post() gets a fresh one, so identical content posted twice is not
+        // mistaken for a duplicate. Override with ->idempotencyKey() to tie it to
+        // your own id (so two calls for the same record never double-post).
+        $correlationId = $this->idempotencyKey ?? (string) Str::uuid();
+
         foreach ($prepared as [, $post]) {
             // Validation already ran synchronously above, so the job need not repeat it.
-            $job = new PublishToConnectionJob($post->platform, $post->post, $post->credentials, skipValidation: true);
+            $job = new PublishToConnectionJob(
+                $post->platform,
+                $post->post,
+                $post->credentials,
+                skipValidation: true,
+                correlationId: $correlationId,
+            );
 
             if (! empty($queue)) {
                 $job->onQueue($queue);

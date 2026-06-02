@@ -14,6 +14,11 @@ return [
     // giving the platform a moment to make the new post commentable.
     'comment_delay' => env('SOCIAL_COMMENT_DELAY', 10),
 
+    // Duplicate protection for the queued path. Default remembers nothing; set to
+    // DatabaseIdempotencyStore::class (and publish the migration) to enable it.
+    'idempotency' => SocialPoster\Idempotency\NullIdempotencyStore::class,
+    'idempotency_table' => 'social_idempotency',
+
     // Reads media metadata for the deep validation checks.
     'inspector' => SocialPoster\Inspectors\FFProbeInspector::class,
 
