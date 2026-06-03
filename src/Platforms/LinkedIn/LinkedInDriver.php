@@ -145,7 +145,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
         $response = $this->rest($post)->post('posts', $this->buildPost($post, null));
 
         return $response->successful()
-            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response)))
+            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response), $this->postUrl($this->foreignId($response))))
             : throw $this->mapError($response);
     }
 
@@ -170,7 +170,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
         $response = $this->rest($post)->post('posts', $this->buildPost($post, $content));
 
         return $response->successful()
-            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response)))
+            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response), $this->postUrl($this->foreignId($response))))
             : throw $this->mapError($response);
     }
 
@@ -286,7 +286,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
         $response = $this->rest($post)->post('posts', $this->buildPost($post, ['media' => ['id' => $state['video']]]));
 
         return $response->successful()
-            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response)))
+            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response), $this->postUrl($this->foreignId($response))))
             : throw $this->mapError($response);
     }
 
@@ -343,7 +343,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
         $post_response = $this->rest($post)->post('posts', $this->buildPost($post, $content));
 
         return $post_response->successful()
-            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($post_response)))
+            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($post_response), $this->postUrl($this->foreignId($post_response))))
             : throw $this->mapError($post_response);
     }
 
@@ -434,6 +434,15 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
                 'LinkedIn-Version' => $this->version,
             ])
             ->baseUrl($this->rest);
+    }
+
+    /**
+     * Build the public post URL from the share/ugcPost urn. Deterministic, so no
+     * extra API call is needed.
+     */
+    protected function postUrl(?string $urn): ?string
+    {
+        return $urn ? 'https://www.linkedin.com/feed/update/'.$urn.'/' : null;
     }
 
     protected function foreignId($response): ?string

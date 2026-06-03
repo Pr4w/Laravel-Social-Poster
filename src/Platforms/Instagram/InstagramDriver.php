@@ -273,7 +273,13 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments
         ]);
 
         if ($this->ok($response)) {
-            return $this->published(PostResult::success(Platform::Instagram, $response->json('id')));
+            $mediaId = (string) $response->json('id');
+
+            return $this->published(PostResult::success(
+                Platform::Instagram,
+                $mediaId,
+                $this->fetchPermalink($post, $mediaId),
+            ));
         }
 
         // The container is processed but the publish itself is not ready yet:
@@ -294,6 +300,22 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments
         }
 
         return (string) $response->json('status_code', 'IN_PROGRESS');
+    }
+
+    /**
+     * Best-effort fetch of the public permalink. The media is already published,
+     * so a failure here (eventual consistency, a missing field) must not fail the
+     * post; the result then carries the media id without a clickable url.
+     */
+    protected function fetchPermalink(PreparedPost $post, string $mediaId): ?string
+    {
+        try {
+            $response = $this->http($post)->get($this->graph.'/'.$mediaId, ['fields' => 'permalink']);
+
+            return $this->ok($response) ? $response->json('permalink') : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     // --- Helpers ---------------------------------------------------------------

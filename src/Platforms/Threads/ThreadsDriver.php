@@ -229,7 +229,13 @@ class ThreadsDriver extends AbstractPlatform
             throw $this->mapError($response);
         }
 
-        return $this->published(PostResult::success(Platform::Threads, $response->json('id')));
+        $mediaId = (string) $response->json('id');
+
+        return $this->published(PostResult::success(
+            Platform::Threads,
+            $mediaId,
+            $this->fetchPermalink($post, $mediaId),
+        ));
     }
 
     protected function containerStatus(PreparedPost $post, string $containerId): string
@@ -241,6 +247,22 @@ class ThreadsDriver extends AbstractPlatform
         }
 
         return (string) $response->json('status', 'IN_PROGRESS');
+    }
+
+    /**
+     * Best-effort fetch of the public permalink. The thread is already published,
+     * so a failure here (eventual consistency, a missing field) must not fail the
+     * post; the result then carries the media id without a clickable url.
+     */
+    protected function fetchPermalink(PreparedPost $post, string $mediaId): ?string
+    {
+        try {
+            $response = $this->http($post)->get($this->graph.'/'.$mediaId, ['fields' => 'permalink']);
+
+            return $this->ok($response) ? $response->json('permalink') : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     // --- Helpers ---------------------------------------------------------------
