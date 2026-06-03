@@ -441,7 +441,7 @@ class TikTokDriver extends AbstractPlatform
         };
     }
 
-    protected function mapError($response, array $sent = []): TemporaryException|PermanentException
+    protected function classifyError($response, array $sent = []): TemporaryException|PermanentException
     {
         $code = (string) $response->json('error.code');
         $message = (string) ($response->json('error.message') ?: 'TikTok request failed.');

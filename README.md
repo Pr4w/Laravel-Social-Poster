@@ -430,6 +430,22 @@ try {
 }
 ```
 
+### Discovering and mapping new errors
+
+Each driver maps raw API errors to the three exceptions in its `classifyError()` method, keyed on the codes and subcodes it knows about. You will not have every code mapped from day one, so every failed response is logged with full context first, through a single chokepoint shared by all drivers. When a post fails, look for:
+
+```
+[SocialPoster] instagram API error: ...
+```
+
+The log context includes an `unmapped` flag (true when the error fell through to `FailureReason::Unknown`), the driver class, the HTTP status, the full response body and headers, and an `identifiers` block that pulls the usual fields out of whatever shape the platform returned:
+
+```
+'identifiers' => ['code' => 190, 'subcode' => 463, 'type' => 'OAuthException', 'message' => '...', 'trace' => '...']
+```
+
+So when something fails, you grep the logs for `"unmapped":true`, read the code and subcode, and add a branch to that driver's `classifyError()`. The logging is on by default; turn it off with `SOCIAL_ERROR_LOGGING=false` or route it to a dedicated channel with `SOCIAL_ERROR_LOG_CHANNEL=stack`. It is wrapped so a logging failure can never mask the real error.
+
 ## Media transfer: pull vs upload
 
 Platforms either pull media from a public URL or have bytes uploaded to them. The `MediaGateway` resolves this so drivers never care.

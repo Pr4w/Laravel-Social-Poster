@@ -350,7 +350,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments
      * Map a Graph error into the three-exception model, from the original
      * subcode handling. 2207027 is handled by the caller as a Pending, not here.
      */
-    protected function mapError($response): TemporaryException|PermanentException
+    protected function classifyError($response): TemporaryException|PermanentException
     {
         $message = (string) $response->json('error.message', 'Instagram request failed.');
         $subcode = $this->subcode($response);

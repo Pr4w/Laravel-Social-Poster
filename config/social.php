@@ -19,6 +19,11 @@ return [
     'idempotency' => SocialPoster\Idempotency\NullIdempotencyStore::class,
     'idempotency_table' => 'social_idempotency',
 
+    // Log every failed platform response (driver, status, code/subcode, body) so
+    // unmapped errors are easy to find and add to a driver's classifyError().
+    'error_logging' => env('SOCIAL_ERROR_LOGGING', true),
+    'error_log_channel' => env('SOCIAL_ERROR_LOG_CHANNEL'),
+
     // Reads media metadata for the deep validation checks.
     'inspector' => SocialPoster\Inspectors\FFProbeInspector::class,
 

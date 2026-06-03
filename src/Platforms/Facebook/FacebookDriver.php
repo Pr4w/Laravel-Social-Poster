@@ -395,7 +395,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         return $response->successful();
     }
 
-    protected function mapError($response): TemporaryException|PermanentException
+    protected function classifyError($response): TemporaryException|PermanentException
     {
         $error = $response->json('error') ?? [];
         $code = (int) ($error['code'] ?? 0);

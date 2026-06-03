@@ -306,7 +306,7 @@ class XDriver extends AbstractPlatform
         };
     }
 
-    protected function mapError($response): TemporaryException|PermanentException
+    protected function classifyError($response): TemporaryException|PermanentException
     {
         $json = $response->json() ?? [];
         $status = $response->status();

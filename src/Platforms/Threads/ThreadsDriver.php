@@ -265,7 +265,7 @@ class ThreadsDriver extends AbstractPlatform
         return $response->successful();
     }
 
-    protected function mapError($response): TemporaryException|PermanentException
+    protected function classifyError($response): TemporaryException|PermanentException
     {
         $error = $response->json('error') ?? [];
         $subcode = isset($error['error_subcode']) ? (int) $error['error_subcode'] : null;

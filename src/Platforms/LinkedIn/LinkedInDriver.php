@@ -448,7 +448,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
         return (string) end($parts);
     }
 
-    protected function mapError($response): TemporaryException|PermanentException
+    protected function classifyError($response): TemporaryException|PermanentException
     {
         $json = $response->json() ?? [];
         $context = ['status' => $response->status(), 'error' => $json];

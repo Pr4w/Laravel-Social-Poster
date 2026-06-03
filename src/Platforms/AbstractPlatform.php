@@ -2,15 +2,18 @@
 
 namespace SocialPoster\Platforms;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Concerns\ValidatesAgainstCapabilities;
 use SocialPoster\Contracts\MediaGateway;
 use SocialPoster\Contracts\MediaInspector;
 use SocialPoster\Contracts\SocialPlatform;
+use SocialPoster\Enums\FailureReason;
 use SocialPoster\Enums\Ingestion;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Exceptions\PermanentException;
+use SocialPoster\Exceptions\TemporaryException;
 use SocialPoster\ValueObjects\Media;
 use SocialPoster\ValueObjects\Pending;
 use SocialPoster\ValueObjects\PostResult;
@@ -164,5 +167,101 @@ abstract class AbstractPlatform implements SocialPlatform
     protected function mergeExtra(PreparedPost $post, array $params): array
     {
         return array_merge($this->extraPayload($post), $params);
+    }
+
+    /**
+     * Final entry point for turning a failed HTTP response into an exception.
+     * Drivers keep calling $this->mapError($response); this runs the driver's
+     * classifyError() mapping and then logs the error with full context, so an
+     * unmapped code or subcode is easy to spot in the logs and add to the driver.
+     *
+     * @param mixed $response
+     */
+    final protected function mapError($response, ...$args): TemporaryException|PermanentException
+    {
+        $exception = $this->classifyError($response, ...$args);
+
+        $this->reportError($response, $exception);
+
+        return $exception;
+    }
+
+    /**
+     * Platform-specific classification of an error response into a Temporary or
+     * Permanent exception with a FailureReason. Drivers override this with their
+     * code/subcode tables; the default treats anything unrecognised as a
+     * permanent unknown error.
+     *
+     * @param mixed $response
+     */
+    protected function classifyError($response): TemporaryException|PermanentException
+    {
+        $message = (string) (data_get($response->json(), 'error.message') ?: 'Request failed.');
+
+        return new PermanentException($message, $this->platform(), FailureReason::Unknown, ['status' => $response->status()]);
+    }
+
+    /**
+     * Log a failed response with as much identifying context as possible. The
+     * `unmapped` flag and the `identifiers` block (code, subcode, message, ...)
+     * make it quick to find an error that fell through to FailureReason::Unknown
+     * and add a specific mapping to the driver's classifyError(). Disable with
+     * config('social.error_logging') or route it with config('social.error_log_channel').
+     *
+     * @param mixed $response
+     */
+    protected function reportError($response, TemporaryException|PermanentException $exception): void
+    {
+        if (! (bool) config('social.error_logging', true)) {
+            return;
+        }
+
+        $body = null;
+
+        try {
+            $body = $response->json();
+        } catch (\Throwable) {
+            // Non-JSON body; fall back to the raw string below.
+        }
+
+        // Pull the usual identifying fields from the various platform error shapes.
+        $identifiers = array_filter([
+            'code' => data_get($body, 'error.code') ?? data_get($body, 'errors.0.code'),
+            'subcode' => data_get($body, 'error.error_subcode'),
+            'type' => data_get($body, 'error.type'),
+            'reason' => data_get($body, 'error.errors.0.reason') ?? data_get($body, 'errors.0.reason'),
+            'message' => data_get($body, 'error.message')
+                ?? data_get($body, 'errors.0.detail')
+                ?? data_get($body, 'errors.0.message'),
+            'service_error_code' => data_get($body, 'serviceErrorCode'),
+            'trace' => data_get($body, 'error.fbtrace_id') ?? data_get($body, 'error.log_id') ?? data_get($body, 'log_id'),
+        ], static fn ($value) => $value !== null && $value !== '');
+
+        $context = [
+            'platform' => $this->platform()->value,
+            'driver' => static::class,
+            'unmapped' => $exception->reason === FailureReason::Unknown,
+            'classified_as' => $exception instanceof TemporaryException ? 'temporary' : 'permanent',
+            'failure_reason' => $exception->reason->value,
+            'retry_after' => $exception instanceof TemporaryException ? $exception->retryAfter : null,
+            'http_status' => $response->status(),
+            'identifiers' => $identifiers,
+            'response_body' => $body ?? $response->body(),
+            'response_headers' => $response->headers(),
+            'exception_context' => $exception->context,
+        ];
+
+        $message = '[SocialPoster] '.$this->platform()->value.' API error: '.$exception->getMessage();
+
+        // Logging must never mask the real error.
+        try {
+            if ($channel = config('social.error_log_channel')) {
+                Log::channel($channel)->error($message, $context);
+            } else {
+                Log::error($message, $context);
+            }
+        } catch (\Throwable) {
+            // ignore
+        }
     }
 }

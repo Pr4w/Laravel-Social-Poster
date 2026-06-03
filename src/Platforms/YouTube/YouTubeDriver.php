@@ -236,7 +236,7 @@ class YouTubeDriver extends AbstractPlatform
         return $image->extension() === 'png' ? 'image/png' : 'image/jpeg';
     }
 
-    protected function mapError($response): TemporaryException|PermanentException
+    protected function classifyError($response): TemporaryException|PermanentException
     {
         $error = $response->json('error') ?? [];
         $status = $response->status();
