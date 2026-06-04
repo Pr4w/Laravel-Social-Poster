@@ -178,7 +178,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         $response = $this->http($post)->post($this->edge($post, '/feed'), $this->mergeExtra($post, $this->prepare($post)));
 
         return $this->ok($response)
-            ? $this->published(PostResult::success(Platform::Facebook, $response->json('id')))
+            ? $this->published(PostResult::success(Platform::Facebook, $response->json("id"), $this->fetchPermalink($post, (string) $response->json("id"))))
             : throw $this->mapError($response);
     }
 
@@ -203,7 +203,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         $response = $this->http($post)->post($this->edge($post, '/feed'), $this->mergeExtra($post, $params));
 
         return $this->ok($response)
-            ? $this->published(PostResult::success(Platform::Facebook, $response->json('id')))
+            ? $this->published(PostResult::success(Platform::Facebook, $response->json("id"), $this->fetchPermalink($post, (string) $response->json("id"))))
             : throw $this->mapError($response);
     }
 
@@ -237,7 +237,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         }
 
         return $this->ok($response)
-            ? $this->published(PostResult::success(Platform::Facebook, $response->json('id')))
+            ? $this->published(PostResult::success(Platform::Facebook, $response->json("id"), $this->fetchPermalink($post, (string) $response->json("id"))))
             : throw $this->mapError($response);
     }
 
@@ -260,7 +260,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
             throw $this->mapError($publish);
         }
 
-        return $this->published(PostResult::success(Platform::Facebook, $publish->json('post_id')));
+        return $this->published(PostResult::success(Platform::Facebook, $publish->json("post_id"), $this->fetchPermalink($post, (string) $publish->json("post_id"))));
     }
 
     // --- Async flows: upload now, finish on resume -----------------------------
@@ -295,7 +295,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
             throw $this->mapError($finish);
         }
 
-        return $this->published(PostResult::success(Platform::Facebook, $finish->json('post_id')));
+        return $this->published(PostResult::success(Platform::Facebook, $finish->json("post_id"), $this->fetchPermalink($post, (string) $finish->json("post_id"))));
     }
 
     protected function startVideoStory(PreparedPost $post, Media $video): PublishOutcome
@@ -325,7 +325,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
             throw $this->mapError($finish);
         }
 
-        return $this->published(PostResult::success(Platform::Facebook, $finish->json('post_id')));
+        return $this->published(PostResult::success(Platform::Facebook, $finish->json("post_id"), $this->fetchPermalink($post, (string) $finish->json("post_id"))));
     }
 
     protected function uploadByUrl(PreparedPost $post, string $uploadUrl, Media $video): void
@@ -354,6 +354,26 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         $ratio = $this->inspectMedia($video)?->aspectRatio();
 
         return $ratio !== null && abs($ratio - 9 / 16) < 0.01;
+    }
+
+    /**
+     * Best-effort fetch of the post's public permalink. The post is already live,
+     * so a failure here must not fail it; the result then carries the id with a
+     * null url.
+     */
+    protected function fetchPermalink(PreparedPost $post, string $postId): ?string
+    {
+        if ($postId === '') {
+            return null;
+        }
+
+        try {
+            $response = $this->http($post)->get($this->graph.'/'.$postId, ['fields' => 'permalink_url']);
+
+            return $this->ok($response) ? $response->json('permalink_url') : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     protected function token(PreparedPost $post): string
