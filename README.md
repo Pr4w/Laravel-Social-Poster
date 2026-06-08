@@ -452,7 +452,7 @@ The log context includes an `unmapped` flag (true when the error fell through to
 
 So when something fails, you grep the logs for `"unmapped":true`, read the code and subcode, and add a branch to that driver's `classifyError()`. The logging is on by default; turn it off with `SOCIAL_ERROR_LOGGING=false` or route it to a dedicated channel with `SOCIAL_ERROR_LOG_CHANNEL=stack`. It is wrapped so a logging failure can never mask the real error.
 
-Connection-level failures (cURL timeouts, DNS, refused connections) produce no response, so they cannot be classified by a driver. The publish job catches them above the driver, retries them with backoff, and logs them with a `transport` flag so they are as visible as response errors. Pull-based video uploads are the usual trigger, since the platform downloads the file during the request; raise `SOCIAL_UPLOAD_TIMEOUT` (seconds, default 300) if large videos still time out.
+Connection-level failures (cURL timeouts, DNS, refused connections) produce no response, so they cannot be classified by a driver. The publish job catches them above the driver, retries them with backoff, and logs them with a `transport` flag so they are as visible as response errors. Large media is the usual trigger: every byte-transfer upload (YouTube's resumable PUT, the chunked uploads on X, LinkedIn, and TikTok, and Facebook's pull-based video) uses a single `SOCIAL_UPLOAD_TIMEOUT` (seconds, default 300), so raise it if big files still time out. Instagram and Threads are pull-based with async status polling, so they stay on the default timeout.
 
 ## Media transfer: pull vs upload
 

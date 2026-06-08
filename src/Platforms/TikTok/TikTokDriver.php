@@ -376,7 +376,7 @@ class TikTokDriver extends AbstractPlatform
                 $response = \Illuminate\Support\Facades\Http::withHeaders([
                     'Content-Range' => "bytes {$start}-{$end}/{$size}",
                     'Content-Type' => $mime,
-                ])->withBody((string) $chunk, $mime)->put($uploadUrl);
+                ])->timeout((int) config('social.upload_timeout', 300))->withBody((string) $chunk, $mime)->put($uploadUrl);
 
                 if (! $response->successful()) {
                     throw new TemporaryException('TikTok rejected a video chunk upload.', Platform::TikTok, FailureReason::ServerError, 30, ['status' => $response->status()]);

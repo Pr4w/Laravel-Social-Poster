@@ -185,6 +185,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
         }
 
         $put = Http::withToken($this->token($post))
+            ->timeout((int) config('social.upload_timeout', 300))
             ->withBody($this->bytes($image), 'application/octet-stream')
             ->put($init->json('value.uploadUrl'));
 
@@ -255,6 +256,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
                 $chunk = fread($handle, $lastByte - $firstByte + 1);
 
                 $put = Http::withToken($this->token($post))
+                    ->timeout((int) config('social.upload_timeout', 300))
                     ->withBody($chunk, 'application/octet-stream')
                     ->put($instruction['uploadUrl']);
 
@@ -304,6 +306,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
             }
 
             $put = Http::withToken($this->token($post))
+                ->timeout((int) config('social.upload_timeout', 300))
                 ->withBody($this->bytes($document), 'application/octet-stream')
                 ->put($init->json('value.uploadUrl'));
 

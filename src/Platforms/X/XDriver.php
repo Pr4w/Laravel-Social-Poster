@@ -138,6 +138,7 @@ class XDriver extends AbstractPlatform
     protected function uploadImage(PreparedPost $post, Media $image): string
     {
         $response = $this->authed($post)
+            ->timeout((int) config('social.upload_timeout', 300))
             ->attach('media', $this->bytes($image), 'image.'.($image->extension() ?: 'jpg'))
             ->post($this->api.'/media/upload', [
                 'media_category' => 'tweet_image',
@@ -210,6 +211,7 @@ class XDriver extends AbstractPlatform
                 }
 
                 $response = $this->authed($post)
+                    ->timeout((int) config('social.upload_timeout', 300))
                     ->attach('media', $chunk, 'chunk')
                     ->post($this->api.'/media/upload/'.$mediaId.'/append', [
                         'segment_index' => $segment,

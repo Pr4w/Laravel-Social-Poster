@@ -115,6 +115,7 @@ class YouTubeDriver extends AbstractPlatform
 
             // 2) Stream the bytes to the session URL.
             $upload = Http::withToken($this->token($post))
+                ->timeout((int) config('social.upload_timeout', 300))
                 ->withHeaders(['Content-Length' => $size])
                 ->withBody(Utils::streamFor(fopen($path, 'rb')), $mime)
                 ->put($uploadUrl);
