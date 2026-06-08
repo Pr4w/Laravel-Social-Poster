@@ -14,6 +14,10 @@ return [
     // giving the platform a moment to make the new post commentable.
     'comment_delay' => env('SOCIAL_COMMENT_DELAY', 10),
 
+    // Timeout (seconds) for byte/video uploads. Pull-based video uploads can be
+    // slow because the platform downloads the file during the request.
+    'upload_timeout' => env('SOCIAL_UPLOAD_TIMEOUT', 300),
+
     // Duplicate protection for the queued path. Default remembers nothing; set to
     // DatabaseIdempotencyStore::class (and publish the migration) to enable it.
     'idempotency' => SocialPoster\Idempotency\NullIdempotencyStore::class,

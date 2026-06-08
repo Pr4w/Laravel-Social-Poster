@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use SocialPoster\Enums\FailureReason;
+use Illuminate\Http\Client\ConnectionException;
 use SocialPoster\Contracts\IdempotencyStore;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Events\PostFailed;
@@ -140,21 +141,60 @@ class PublishToConnectionJob implements ShouldQueue, ShouldBeUniqueUntilProcessi
                 $events->dispatch(new PostPublished($result));
                 $this->dispatchComment($driver, $result);
             }
+        } catch (ConnectionException $e) {
+            // cURL-level failure (timeout, DNS, refused, TLS): no response was
+            // ever returned, so the driver could not classify it. Transient.
+            $this->logTransport($e);
+            $this->releaseOrFail(TemporaryException::connection($this->platform, $e), $events, $idempotency, $key);
         } catch (TemporaryException $e) {
-            if ($this->attempts() >= $this->tries) {
-                $idempotency->forget($key);
-                $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
-                $this->fail($e);
-
-                return;
-            }
-
-            $this->release($e->retryAfter ?? $this->backoffFor($this->attempts()));
+            $this->releaseOrFail($e, $events, $idempotency, $key);
         } catch (SocialPosterException $e) {
             $idempotency->forget($key);
             $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
             $this->fail($e);
         }
+    }
+
+    protected function logTransport(\Throwable $e): void
+    {
+        if (! (bool) config('social.error_logging', true)) {
+            return;
+        }
+
+        $context = [
+            'platform' => $this->platform->value,
+            'transport' => true,
+            'exception' => $e::class,
+            'message' => $e->getMessage(),
+            'attempt' => $this->attempts(),
+            'tries' => $this->tries,
+            'will_retry' => $this->attempts() < $this->tries,
+        ];
+
+        $message = '[SocialPoster] '.$this->platform->value.' transport error: '.$e->getMessage();
+
+        try {
+            if ($channel = config('social.error_log_channel')) {
+                \Illuminate\Support\Facades\Log::channel($channel)->error($message, $context);
+            } else {
+                \Illuminate\Support\Facades\Log::error($message, $context);
+            }
+        } catch (\Throwable) {
+            // never let logging interfere with retry handling
+        }
+    }
+
+    protected function releaseOrFail(TemporaryException $e, Dispatcher $events, IdempotencyStore $idempotency, string $key): void
+    {
+        if ($this->attempts() >= $this->tries) {
+            $idempotency->forget($key);
+            $events->dispatch(new PostFailed($this->platform, $e, $this->post->metadata));
+            $this->fail($e);
+
+            return;
+        }
+
+        $this->release($e->retryAfter ?? $this->backoffFor($this->attempts()));
     }
 
     protected function dispatchComment(\SocialPoster\Contracts\SocialPlatform $driver, \SocialPoster\ValueObjects\PostResult $result): void

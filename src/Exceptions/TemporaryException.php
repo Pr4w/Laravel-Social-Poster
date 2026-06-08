@@ -22,4 +22,21 @@ class TemporaryException extends SocialPosterException
     ) {
         parent::__construct($message, $platform, $reason, $context, $previous);
     }
+
+    /**
+     * A connection-level failure (cURL timeout, DNS, refused connection, TLS).
+     * These never produce a response, so a driver's classifyError() never sees
+     * them; they are transient by nature and retried with backoff.
+     */
+    public static function connection(?Platform $platform, Throwable $e): self
+    {
+        return new self(
+            'Network error contacting '.($platform?->value ?? 'the platform').': '.$e->getMessage(),
+            $platform,
+            FailureReason::Timeout,
+            null,
+            ['connection' => true],
+            $e,
+        );
+    }
 }

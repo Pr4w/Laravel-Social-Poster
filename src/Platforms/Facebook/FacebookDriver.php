@@ -218,7 +218,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         $params = $this->mergeExtra($post, $params);
 
         $thumb = $this->options($post)?->thumbnail;
-        $request = $this->http($post)->timeout(120);
+        $request = $this->http($post)->timeout((int) config('social.upload_timeout', 300));
 
         try {
             // Facebook wants the thumbnail as uploaded image bytes, not a URL.
@@ -330,7 +330,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
 
     protected function uploadByUrl(PreparedPost $post, string $uploadUrl, Media $video): void
     {
-        $upload = Http::timeout(60)->withHeaders([
+        $upload = Http::timeout((int) config('social.upload_timeout', 300))->withHeaders([
             'Authorization' => 'OAuth '.$this->token($post),
             'file_url' => $this->mediaUrl($video),
         ])->post($uploadUrl);

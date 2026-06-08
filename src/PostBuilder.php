@@ -4,6 +4,7 @@ namespace SocialPoster;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\MessageBag;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Str;
 use SocialPoster\Contracts\PlatformOptions;
 use SocialPoster\Contracts\SocialPlatform;
@@ -221,6 +222,10 @@ class PostBuilder
                 $result = $outcome->result->withMetadata($post->metadata());
                 $this->events->dispatch(new PostPublished($result));
                 $this->commentInline($driver, $post, $result);
+            } catch (ConnectionException $e) {
+                $temporary = TemporaryException::connection($post->platform, $e);
+                $this->events->dispatch(new PostFailed($post->platform, $temporary, $post->metadata()));
+                $result = PostResult::failed($post->platform, $temporary)->withMetadata($post->metadata());
             } catch (SocialPosterException $e) {
                 $this->events->dispatch(new PostFailed($post->platform, $e, $post->metadata()));
                 $result = PostResult::failed($post->platform, $e)->withMetadata($post->metadata());
