@@ -147,12 +147,20 @@ class TikTokDriver extends AbstractPlatform
 
         // PUBLISH_COMPLETE ends a direct post; SEND_TO_USER_INBOX ends a draft.
         if ($status === 'PUBLISH_COMPLETE' || $status === 'SEND_TO_USER_INBOX') {
-            $postId = $response->json('data.publicaly_available_post_id.0');
+            // Direct posts surface a public post id once live; drafts never do
+            // (they sit unpublished in the inbox), so the publish_id is their only
+            // handle. Keep publish_id in the payload either way for webhook
+            // reconciliation, which keys on it.
+            $publicId = $response->json('data.publicaly_available_post_id.0');
 
             return $this->published(PostResult::success(
                 Platform::TikTok,
-                $state['publish_id'],
-                payload: ['status' => $status, 'post_id' => $postId],
+                $publicId ?: $state['publish_id'],
+                payload: [
+                    'status' => $status,
+                    'publish_id' => $state['publish_id'],
+                    'post_id' => $publicId,
+                ],
             ));
         }
 
