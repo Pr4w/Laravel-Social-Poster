@@ -2,7 +2,6 @@
 
 namespace SocialPoster\Platforms\Threads;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Capabilities\CaptionRules;
@@ -15,6 +14,7 @@ use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\TemporaryException;
+use SocialPoster\Concerns\TalksToMetaGraph;
 use SocialPoster\Platforms\AbstractPlatform;
 use SocialPoster\ValueObjects\Media;
 use SocialPoster\ValueObjects\PostResult;
@@ -30,11 +30,16 @@ use SocialPoster\ValueObjects\PublishOutcome;
  */
 class ThreadsDriver extends AbstractPlatform
 {
-    protected string $graph = 'https://graph.threads.net/v1.0';
+    use TalksToMetaGraph;
 
     public function platform(): Platform
     {
         return Platform::Threads;
+    }
+
+    protected function graphBase(): string
+    {
+        return 'https://graph.threads.net/'.$this->apiConfig('graph_version', 'v1.0');
     }
 
     protected function ingestion(): Ingestion
@@ -238,54 +243,7 @@ class ThreadsDriver extends AbstractPlatform
         ));
     }
 
-    protected function containerStatus(PreparedPost $post, string $containerId): string
-    {
-        $response = $this->http($post)->get($this->graph.'/'.$containerId, ['fields' => 'status']);
-
-        if (! $this->ok($response)) {
-            throw $this->mapError($response);
-        }
-
-        return (string) $response->json('status', 'IN_PROGRESS');
-    }
-
-    /**
-     * Best-effort fetch of the public permalink. The thread is already published,
-     * so a failure here (eventual consistency, a missing field) must not fail the
-     * post; the result then carries the media id without a clickable url.
-     */
-    protected function fetchPermalink(PreparedPost $post, string $mediaId): ?string
-    {
-        try {
-            $response = $this->http($post)->get($this->graph.'/'.$mediaId, ['fields' => 'permalink']);
-
-            return $this->ok($response) ? $response->json('permalink') : null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     // --- Helpers ---------------------------------------------------------------
-
-    protected function token(PreparedPost $post): string
-    {
-        return (string) $post->credentials->get('access_token');
-    }
-
-    protected function edge(PreparedPost $post, string $path): string
-    {
-        return $this->graph.'/'.$post->credentials->get('account_id').$path;
-    }
-
-    protected function http(PreparedPost $post)
-    {
-        return Http::withToken($this->token($post));
-    }
-
-    protected function ok($response): bool
-    {
-        return $response->successful();
-    }
 
     protected function classifyError($response): TemporaryException|PermanentException
     {

@@ -2,12 +2,14 @@
 
 namespace SocialPoster\Platforms;
 
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Concerns\ValidatesAgainstCapabilities;
 use SocialPoster\Contracts\MediaGateway;
 use SocialPoster\Contracts\MediaInspector;
+use SocialPoster\Contracts\PlatformOptions;
 use SocialPoster\Contracts\SocialPlatform;
 use SocialPoster\Enums\FailureReason;
 use SocialPoster\Enums\Ingestion;
@@ -138,6 +140,63 @@ abstract class AbstractPlatform implements SocialPlatform
     protected function mediaPath(Media $media): string
     {
         return $this->gateway?->path($media) ?? $media->source;
+    }
+
+    /**
+     * Credential key holding the bearer token for this platform. Overridden by
+     * drivers that name it differently (Facebook uses 'page_access_token').
+     */
+    protected string $tokenKey = 'access_token';
+
+    protected function token(PreparedPost $post): string
+    {
+        return (string) $post->credentials->get($this->tokenKey);
+    }
+
+    /**
+     * The default HTTP client: a bearer-token request. Drivers that need extra
+     * headers or a base URL (LinkedIn, TikTok) decorate this rather than rebuild
+     * it, so every request still carries the token in one place.
+     */
+    protected function http(PreparedPost $post)
+    {
+        return Http::withToken($this->token($post));
+    }
+
+    protected function bytes(Media $media): string
+    {
+        return (string) file_get_contents($this->mediaPath($media));
+    }
+
+    /** Whether the platform considers this response a success. */
+    protected function ok($response): bool
+    {
+        return $response->successful();
+    }
+
+    /**
+     * Return the post's options only when they are the given driver-specific type.
+     * Guards against an options object set for another platform in a fan-out.
+     *
+     * @template T of PlatformOptions
+     * @param  class-string<T>  $class
+     * @return T|null
+     */
+    protected function optionsOf(PreparedPost $post, string $class): ?PlatformOptions
+    {
+        $options = $post->options();
+
+        return $options instanceof $class ? $options : null;
+    }
+
+    /**
+     * Read a per-platform API setting (e.g. the Graph version or LinkedIn version)
+     * from config('social.api.<platform>.<key>'), falling back to the driver's
+     * baked-in default so nothing breaks when the config is not published.
+     */
+    protected function apiConfig(string $key, mixed $default = null): mixed
+    {
+        return config("social.api.{$this->platform()->value}.{$key}", $default);
     }
 
     /**

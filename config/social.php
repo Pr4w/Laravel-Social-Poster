@@ -28,6 +28,16 @@ return [
     'error_logging' => env('SOCIAL_ERROR_LOGGING', true),
     'error_log_channel' => env('SOCIAL_ERROR_LOG_CHANNEL'),
 
+    // Per-platform API versions. Bumping a Graph or LinkedIn API version becomes a
+    // config/env change here instead of a package edit. Each driver falls back to a
+    // baked-in default when a value is absent, so this whole block is optional.
+    'api' => [
+        'facebook' => ['graph_version' => env('SOCIAL_FACEBOOK_GRAPH_VERSION', 'v23.0')],
+        'instagram' => ['graph_version' => env('SOCIAL_INSTAGRAM_GRAPH_VERSION', 'v23.0')],
+        'threads' => ['graph_version' => env('SOCIAL_THREADS_GRAPH_VERSION', 'v1.0')],
+        'linkedin' => ['version' => env('SOCIAL_LINKEDIN_VERSION', '202605')],
+    ],
+
     // Reads media metadata for the deep validation checks.
     'inspector' => SocialPoster\Inspectors\FFProbeInspector::class,
 

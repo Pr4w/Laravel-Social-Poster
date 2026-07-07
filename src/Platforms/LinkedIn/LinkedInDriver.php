@@ -2,7 +2,6 @@
 
 namespace SocialPoster\Platforms\LinkedIn;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Capabilities\CaptionRules;
@@ -36,8 +35,6 @@ use SocialPoster\ValueObjects\PublishOutcome;
 class LinkedInDriver extends AbstractPlatform implements SupportsComments
 {
     protected string $rest = 'https://api.linkedin.com/rest';
-
-    protected string $version = '202605';
 
     public function platform(): Platform
     {
@@ -144,7 +141,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
     {
         $response = $this->rest($post)->post('posts', $this->buildPost($post, null));
 
-        return $response->successful()
+        return $this->ok($response)
             ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response), $this->postUrl($this->foreignId($response))))
             : throw $this->mapError($response);
     }
@@ -169,7 +166,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
 
         $response = $this->rest($post)->post('posts', $this->buildPost($post, $content));
 
-        return $response->successful()
+        return $this->ok($response)
             ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response), $this->postUrl($this->foreignId($response))))
             : throw $this->mapError($response);
     }
@@ -180,16 +177,16 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
             'initializeUploadRequest' => ['owner' => $this->author($post)],
         ]);
 
-        if (! $init->successful()) {
+        if (! $this->ok($init)) {
             throw $this->mapError($init);
         }
 
-        $put = Http::withToken($this->token($post))
+        $put = $this->http($post)
             ->timeout((int) config('social.upload_timeout', 300))
             ->withBody($this->bytes($image), 'application/octet-stream')
             ->put($init->json('value.uploadUrl'));
 
-        if (! $put->successful()) {
+        if (! $this->ok($put)) {
             throw new TemporaryException('Failed to upload an image to LinkedIn.', Platform::LinkedIn, FailureReason::ServerError);
         }
 
@@ -213,7 +210,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
                 ],
             ]);
 
-            if (! $init->successful()) {
+            if (! $this->ok($init)) {
                 throw $this->mapError($init);
             }
 
@@ -228,7 +225,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
                 ],
             ]);
 
-            if (! $finalize->successful()) {
+            if (! $this->ok($finalize)) {
                 throw $this->mapError($finalize);
             }
 
@@ -255,12 +252,12 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
                 fseek($handle, $firstByte);
                 $chunk = fread($handle, $lastByte - $firstByte + 1);
 
-                $put = Http::withToken($this->token($post))
+                $put = $this->http($post)
                     ->timeout((int) config('social.upload_timeout', 300))
                     ->withBody($chunk, 'application/octet-stream')
                     ->put($instruction['uploadUrl']);
 
-                if (! $put->successful()) {
+                if (! $this->ok($put)) {
                     throw new TemporaryException('Failed to upload a video chunk to LinkedIn.', Platform::LinkedIn, FailureReason::ServerError);
                 }
 
@@ -287,7 +284,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
 
         $response = $this->rest($post)->post('posts', $this->buildPost($post, ['media' => ['id' => $state['video']]]));
 
-        return $response->successful()
+        return $this->ok($response)
             ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($response), $this->postUrl($this->foreignId($response))))
             : throw $this->mapError($response);
     }
@@ -301,16 +298,16 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
                 'initializeUploadRequest' => ['owner' => $this->author($post)],
             ]);
 
-            if (! $init->successful()) {
+            if (! $this->ok($init)) {
                 throw $this->mapError($init);
             }
 
-            $put = Http::withToken($this->token($post))
+            $put = $this->http($post)
                 ->timeout((int) config('social.upload_timeout', 300))
                 ->withBody($this->bytes($document), 'application/octet-stream')
                 ->put($init->json('value.uploadUrl'));
 
-            if (! $put->successful()) {
+            if (! $this->ok($put)) {
                 throw new TemporaryException('Failed to upload a document to LinkedIn.', Platform::LinkedIn, FailureReason::ServerError);
             }
 
@@ -328,7 +325,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
     {
         $response = $this->rest($post)->get('documents/'.urlencode($state['document']));
 
-        if (! $response->successful()) {
+        if (! $this->ok($response)) {
             throw $this->mapError($response);
         }
 
@@ -343,11 +340,11 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
         }
 
         $content = ['media' => ['title' => $state['title'], 'id' => $state['document']]];
-        $post_response = $this->rest($post)->post('posts', $this->buildPost($post, $content));
+        $postResponse = $this->rest($post)->post('posts', $this->buildPost($post, $content));
 
-        return $post_response->successful()
-            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($post_response), $this->postUrl($this->foreignId($post_response))))
-            : throw $this->mapError($post_response);
+        return $this->ok($postResponse)
+            ? $this->published(PostResult::success(Platform::LinkedIn, $this->foreignId($postResponse), $this->postUrl($this->foreignId($postResponse))))
+            : throw $this->mapError($postResponse);
     }
 
     // --- Helpers ---------------------------------------------------------------
@@ -376,10 +373,10 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
 
     protected function assetStatus(PreparedPost $post, string $videoUrn): string
     {
-        $response = Http::withToken($this->token($post))
+        $response = $this->http($post)
             ->get('https://api.linkedin.com/v2/assets/'.$this->urnId($videoUrn));
 
-        if (! $response->successful()) {
+        if (! $this->ok($response)) {
             throw $this->mapError($response);
         }
 
@@ -388,19 +385,12 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
 
     protected function options(PreparedPost $post): ?LinkedInOptions
     {
-        $options = $post->options();
-
-        return $options instanceof LinkedInOptions ? $options : null;
+        return $this->optionsOf($post, LinkedInOptions::class);
     }
 
     protected function escape(string $text): string
     {
         return preg_replace('/[\\\\()\[\]{}@*<>_~]/', '\\\\$0', $text) ?? $text;
-    }
-
-    protected function bytes(Media $media): string
-    {
-        return (string) file_get_contents($this->mediaPath($media));
     }
 
     protected function author(PreparedPost $post): string
@@ -417,24 +407,19 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
             'message' => ['text' => $comment],
         ]);
 
-        if (! $response->successful()) {
+        if (! $this->ok($response)) {
             throw $this->mapError($response);
         }
 
         return $this->foreignId($response) ?? $response->json('commentUrn') ?? $response->json('$URN');
     }
 
-    protected function token(PreparedPost $post): string
-    {
-        return (string) $post->credentials->get('access_token');
-    }
-
     protected function rest(PreparedPost $post)
     {
-        return Http::withToken($this->token($post))
+        return $this->http($post)
             ->withHeaders([
                 'X-Restli-Protocol-Version' => '2.0.0',
-                'LinkedIn-Version' => $this->version,
+                'LinkedIn-Version' => (string) $this->apiConfig('version', '202605'),
             ])
             ->baseUrl($this->rest);
     }

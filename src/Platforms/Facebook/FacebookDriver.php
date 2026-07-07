@@ -15,6 +15,7 @@ use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\TemporaryException;
+use SocialPoster\Concerns\TalksToMetaGraph;
 use SocialPoster\Contracts\SupportsComments;
 use SocialPoster\Platforms\AbstractPlatform;
 use SocialPoster\ValueObjects\Media;
@@ -32,11 +33,23 @@ use SocialPoster\ValueObjects\PublishOutcome;
  */
 class FacebookDriver extends AbstractPlatform implements SupportsComments
 {
-    protected string $graph = 'https://graph.facebook.com/v23.0';
+    use TalksToMetaGraph;
+
+    protected string $tokenKey = 'page_access_token';
 
     public function platform(): Platform
     {
         return Platform::Facebook;
+    }
+
+    protected function graphBase(): string
+    {
+        return 'https://graph.facebook.com/'.$this->apiConfig('graph_version', 'v23.0');
+    }
+
+    protected function permalinkField(): string
+    {
+        return 'permalink_url';
     }
 
     protected function ingestion(): Ingestion
@@ -344,9 +357,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
 
     protected function options(PreparedPost $post): ?FacebookOptions
     {
-        $options = $post->options();
-
-        return $options instanceof FacebookOptions ? $options : null;
+        return $this->optionsOf($post, FacebookOptions::class);
     }
 
     protected function isReel(Media $video): bool
@@ -356,35 +367,10 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         return $ratio !== null && abs($ratio - 9 / 16) < 0.01;
     }
 
-    /**
-     * Best-effort fetch of the post's public permalink. The post is already live,
-     * so a failure here must not fail it; the result then carries the id with a
-     * null url.
-     */
-    protected function fetchPermalink(PreparedPost $post, string $postId): ?string
-    {
-        if ($postId === '') {
-            return null;
-        }
-
-        try {
-            $response = $this->http($post)->get($this->graph.'/'.$postId, ['fields' => 'permalink_url']);
-
-            return $this->ok($response) ? $response->json('permalink_url') : null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    protected function token(PreparedPost $post): string
-    {
-        return (string) $post->credentials->get('page_access_token');
-    }
-
     public function comment(PreparedPost $context, string $postId, string $comment): ?string
     {
         // POST /<PAGE_POST_ID>/comments with the Page token.
-        $response = $this->http($context)->post($this->graph.'/'.$postId.'/comments', [
+        $response = $this->http($context)->post($this->graphBase().'/'.$postId.'/comments', [
             'message' => $comment,
         ]);
 
@@ -393,26 +379,6 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments
         }
 
         return $response->json('id');
-    }
-
-    protected function bytes(Media $media): string
-    {
-        return (string) file_get_contents($this->mediaPath($media));
-    }
-
-    protected function edge(PreparedPost $post, string $path): string
-    {
-        return $this->graph.'/'.$post->credentials->get('account_id').$path;
-    }
-
-    protected function http(PreparedPost $post)
-    {
-        return Http::withToken($this->token($post));
-    }
-
-    protected function ok($response): bool
-    {
-        return $response->successful();
     }
 
     protected function classifyError($response): TemporaryException|PermanentException

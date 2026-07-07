@@ -2,7 +2,6 @@
 
 namespace SocialPoster\Platforms\X;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Capabilities\CaptionRules;
@@ -137,7 +136,7 @@ class XDriver extends AbstractPlatform
 
     protected function uploadImage(PreparedPost $post, Media $image): string
     {
-        $response = $this->authed($post)
+        $response = $this->http($post)
             ->timeout((int) config('social.upload_timeout', 300))
             ->attach('media', $this->bytes($image), 'image.'.($image->extension() ?: 'jpg'))
             ->post($this->api.'/media/upload', [
@@ -145,7 +144,7 @@ class XDriver extends AbstractPlatform
                 'media_type' => $this->mime($image),
             ]);
 
-        if (! $response->successful()) {
+        if (! $this->ok($response)) {
             throw $this->mapError($response);
         }
 
@@ -160,22 +159,22 @@ class XDriver extends AbstractPlatform
             $path = $this->mediaPath($item);
             $size = @filesize($path) ?: 0;
 
-            $init = $this->authed($post)->post($this->api.'/media/upload/initialize', [
+            $init = $this->http($post)->post($this->api.'/media/upload/initialize', [
                 'media_category' => $this->category($item),
                 'media_type' => $this->mime($item),
                 'total_bytes' => $size,
             ]);
 
-            if (! $init->successful()) {
+            if (! $this->ok($init)) {
                 throw $this->mapError($init);
             }
 
             $mediaId = (string) $init->json('data.id');
             $this->appendChunks($post, $mediaId, $path);
 
-            $finalize = $this->authed($post)->post($this->api.'/media/upload/'.$mediaId.'/finalize');
+            $finalize = $this->http($post)->post($this->api.'/media/upload/'.$mediaId.'/finalize');
 
-            if (! $finalize->successful()) {
+            if (! $this->ok($finalize)) {
                 throw $this->mapError($finalize);
             }
 
@@ -210,14 +209,14 @@ class XDriver extends AbstractPlatform
                     break;
                 }
 
-                $response = $this->authed($post)
+                $response = $this->http($post)
                     ->timeout((int) config('social.upload_timeout', 300))
                     ->attach('media', $chunk, 'chunk')
                     ->post($this->api.'/media/upload/'.$mediaId.'/append', [
                         'segment_index' => $segment,
                     ]);
 
-                if (! $response->successful()) {
+                if (! $this->ok($response)) {
                     throw $this->mapError($response);
                 }
 
@@ -231,12 +230,12 @@ class XDriver extends AbstractPlatform
     /** @return array{0: string, 1: int} [state, check_after_secs] */
     protected function mediaStatus(PreparedPost $post, string $mediaId): array
     {
-        $response = $this->authed($post)->get($this->api.'/media/upload', [
+        $response = $this->http($post)->get($this->api.'/media/upload', [
             'command' => 'STATUS',
             'media_id' => $mediaId,
         ]);
 
-        if (! $response->successful()) {
+        if (! $this->ok($response)) {
             throw $this->mapError($response);
         }
 
@@ -257,9 +256,9 @@ class XDriver extends AbstractPlatform
             $payload['media'] = ['media_ids' => $mediaIds];
         }
 
-        $response = $this->authed($post)->post($this->api.'/tweets', $this->mergeExtra($post, $payload));
+        $response = $this->http($post)->post($this->api.'/tweets', $this->mergeExtra($post, $payload));
 
-        if (! $response->successful()) {
+        if (! $this->ok($response)) {
             throw $this->mapError($response);
         }
 
@@ -269,21 +268,6 @@ class XDriver extends AbstractPlatform
     }
 
     // --- Helpers ---------------------------------------------------------------
-
-    protected function authed(PreparedPost $post)
-    {
-        return Http::withToken($this->token($post));
-    }
-
-    protected function token(PreparedPost $post): string
-    {
-        return (string) $post->credentials->get('access_token');
-    }
-
-    protected function bytes(Media $media): string
-    {
-        return (string) file_get_contents($this->mediaPath($media));
-    }
 
     protected function isGif(?Media $media): bool
     {

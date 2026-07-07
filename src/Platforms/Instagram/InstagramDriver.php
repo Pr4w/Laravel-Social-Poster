@@ -2,7 +2,6 @@
 
 namespace SocialPoster\Platforms\Instagram;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Capabilities\CaptionRules;
@@ -15,6 +14,7 @@ use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\TemporaryException;
+use SocialPoster\Concerns\TalksToMetaGraph;
 use SocialPoster\Contracts\SupportsComments;
 use SocialPoster\Platforms\AbstractPlatform;
 use SocialPoster\ValueObjects\Media;
@@ -33,11 +33,21 @@ use SocialPoster\ValueObjects\PublishOutcome;
  */
 class InstagramDriver extends AbstractPlatform implements SupportsComments
 {
-    protected string $graph = 'https://graph.facebook.com/v23.0';
+    use TalksToMetaGraph;
 
     public function platform(): Platform
     {
         return Platform::Instagram;
+    }
+
+    protected function graphBase(): string
+    {
+        return 'https://graph.facebook.com/'.$this->apiConfig('graph_version', 'v23.0');
+    }
+
+    protected function containerStatusField(): string
+    {
+        return 'status_code';
     }
 
     protected function ingestion(): Ingestion
@@ -291,51 +301,17 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments
         throw $this->mapError($response);
     }
 
-    protected function containerStatus(PreparedPost $post, string $containerId): string
-    {
-        $response = $this->http($post)->get($this->graph.'/'.$containerId, ['fields' => 'status_code']);
-
-        if (! $this->ok($response)) {
-            throw $this->mapError($response);
-        }
-
-        return (string) $response->json('status_code', 'IN_PROGRESS');
-    }
-
-    /**
-     * Best-effort fetch of the public permalink. The media is already published,
-     * so a failure here (eventual consistency, a missing field) must not fail the
-     * post; the result then carries the media id without a clickable url.
-     */
-    protected function fetchPermalink(PreparedPost $post, string $mediaId): ?string
-    {
-        try {
-            $response = $this->http($post)->get($this->graph.'/'.$mediaId, ['fields' => 'permalink']);
-
-            return $this->ok($response) ? $response->json('permalink') : null;
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     // --- Helpers ---------------------------------------------------------------
 
     protected function options(PreparedPost $post): ?InstagramOptions
     {
-        $options = $post->options();
-
-        return $options instanceof InstagramOptions ? $options : null;
-    }
-
-    protected function token(PreparedPost $post): string
-    {
-        return (string) $post->credentials->get('access_token');
+        return $this->optionsOf($post, InstagramOptions::class);
     }
 
     public function comment(PreparedPost $context, string $postId, string $comment): ?string
     {
         // POST /<IG_MEDIA_ID>/comments — the published media id is the post id.
-        $response = $this->http($context)->post($this->graph.'/'.$postId.'/comments', [
+        $response = $this->http($context)->post($this->graphBase().'/'.$postId.'/comments', [
             'message' => $comment,
         ]);
 
@@ -344,21 +320,6 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments
         }
 
         return $response->json('id');
-    }
-
-    protected function edge(PreparedPost $post, string $path): string
-    {
-        return $this->graph.'/'.$post->credentials->get('account_id').$path;
-    }
-
-    protected function http(PreparedPost $post)
-    {
-        return Http::withToken($this->token($post));
-    }
-
-    protected function ok($response): bool
-    {
-        return $response->successful();
     }
 
     protected function subcode($response): ?int

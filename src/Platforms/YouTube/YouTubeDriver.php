@@ -3,7 +3,6 @@
 namespace SocialPoster\Platforms\YouTube;
 
 use GuzzleHttp\Psr7\Utils;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Capabilities\CaptionRules;
@@ -96,14 +95,14 @@ class YouTubeDriver extends AbstractPlatform
             $mime = $this->videoMime($video);
 
             // 1) Open the resumable session with the metadata.
-            $session = Http::withToken($this->token($post))
+            $session = $this->http($post)
                 ->withHeaders([
                     'X-Upload-Content-Length' => $size,
                     'X-Upload-Content-Type' => $mime,
                 ])
                 ->post($this->resumable, $this->buildBody($post));
 
-            if (! $session->successful()) {
+            if (! $this->ok($session)) {
                 throw $this->mapError($session);
             }
 
@@ -114,13 +113,13 @@ class YouTubeDriver extends AbstractPlatform
             }
 
             // 2) Stream the bytes to the session URL.
-            $upload = Http::withToken($this->token($post))
+            $upload = $this->http($post)
                 ->timeout((int) config('social.upload_timeout', 300))
                 ->withHeaders(['Content-Length' => $size])
                 ->withBody(Utils::streamFor(fopen($path, 'rb')), $mime)
                 ->put($uploadUrl);
 
-            if (! $upload->successful()) {
+            if (! $this->ok($upload)) {
                 throw $this->mapError($upload);
             }
 
@@ -189,11 +188,11 @@ class YouTubeDriver extends AbstractPlatform
         try {
             $bytes = (string) file_get_contents($this->mediaPath($thumbnail));
 
-            $response = Http::withToken($this->token($post))
+            $response = $this->http($post)
                 ->withBody($bytes, $this->thumbnailMime($thumbnail))
                 ->post($this->thumbnailEndpoint.'?videoId='.$videoId);
 
-            if (! $response->successful()) {
+            if (! $this->ok($response)) {
                 // Common case: the channel is not eligible for custom thumbnails.
                 return (string) ($response->json('error.message') ?: 'Thumbnail could not be set.');
             }
@@ -206,16 +205,9 @@ class YouTubeDriver extends AbstractPlatform
 
     // --- Helpers ---------------------------------------------------------------
 
-    protected function token(PreparedPost $post): string
-    {
-        return (string) $post->credentials->get('access_token');
-    }
-
     protected function options(PreparedPost $post): ?YouTubeOptions
     {
-        $options = $post->options();
-
-        return $options instanceof YouTubeOptions ? $options : null;
+        return $this->optionsOf($post, YouTubeOptions::class);
     }
 
     protected function videoMime(Media $video): string

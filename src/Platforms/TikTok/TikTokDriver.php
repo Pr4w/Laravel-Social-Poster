@@ -2,6 +2,7 @@
 
 namespace SocialPoster\Platforms\TikTok;
 
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\MessageBag;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Capabilities\CaptionRules;
@@ -381,7 +382,7 @@ class TikTokDriver extends AbstractPlatform
                 $chunk = fread($handle, $length);
                 $end = $start + strlen((string) $chunk) - 1;
 
-                $response = \Illuminate\Support\Facades\Http::withHeaders([
+                $response = Http::withHeaders([
                     'Content-Range' => "bytes {$start}-{$end}/{$size}",
                     'Content-Type' => $mime,
                 ])->timeout((int) config('social.upload_timeout', 300))->withBody((string) $chunk, $mime)->put($uploadUrl);
@@ -408,22 +409,17 @@ class TikTokDriver extends AbstractPlatform
 
     protected function tt(PreparedPost $post)
     {
-        return \Illuminate\Support\Facades\Http::withToken($this->token($post))
+        return $this->http($post)
             ->withHeaders(['Content-Type' => 'application/json; charset=UTF-8']);
-    }
-
-    protected function token(PreparedPost $post): string
-    {
-        return (string) $post->credentials->get('access_token');
     }
 
     protected function options(PreparedPost $post): ?TikTokOptions
     {
-        $options = $post->options();
-
-        return $options instanceof TikTokOptions ? $options : null;
+        return $this->optionsOf($post, TikTokOptions::class);
     }
 
+    // TikTok returns HTTP 200 with an error body, so success is HTTP-ok AND a
+    // clean error.code. This overrides the base ok() used by every other driver.
     protected function ok($response): bool
     {
         return $response->successful() && in_array($response->json('error.code'), ['ok', null], true);
