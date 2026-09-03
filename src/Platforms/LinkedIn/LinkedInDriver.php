@@ -36,6 +36,8 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
 {
     protected string $rest = 'https://api.linkedin.com/rest';
 
+    protected int $captionLimit = 3000;
+
     public function platform(): Platform
     {
         return Platform::LinkedIn;
@@ -49,7 +51,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
     public function capabilities(): Capabilities
     {
         return new Capabilities(
-            caption: new CaptionRules(max: 3000),
+            caption: new CaptionRules(max: $this->captionLimit),
             media: new MediaRules(
                 minCount: 0,
                 maxCount: 20,
@@ -64,7 +66,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
 
     protected function rulesFor(PreparedPost $post): Capabilities
     {
-        $caption = new CaptionRules(max: 3000);
+        $caption = new CaptionRules(max: $this->captionMax($post));
 
         // Multi-image carousel: images only, up to 20.
         if (count($post->media()) > 1) {
@@ -91,20 +93,111 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments
 
     protected function validatePlatformRules(PreparedPost $post, MessageBag $errors): void
     {
-        if (trim((string) $post->caption()) === '') {
+        $caption = (string) $post->caption();
+
+        if (trim($caption) === '') {
             $errors->add('caption', "LinkedIn posts can't have an empty caption.");
+
+            return;
+        }
+
+        // With mentions the raw caption carries {{mention:N}} markers, so the
+        // generic engine can't measure the real length (rulesFor lifts its cap for
+        // this case). LinkedIn counts the visible text — names, not URNs — so that
+        // is what we check here, matching what the user actually sees.
+        $mentions = $this->options($post)?->mentions ?? [];
+
+        if ($mentions !== []) {
+            $visible = mb_strlen($this->visibleText($caption, $mentions));
+
+            if ($visible > $this->captionLimit) {
+                $errors->add('caption', "Caption exceeds the {$this->captionLimit} character limit (currently {$visible} visible characters).");
+            }
         }
     }
 
     protected function prepare(PreparedPost $post): array
     {
         $caption = (string) $post->caption();
-        $escape = $this->options($post)?->escapeText ?? true;
+        $options = $this->options($post);
+        $mentions = $options?->mentions ?? [];
 
-        // NOTE: validation checks the raw caption length. Escaping happens here and
-        // can push the transmitted length past the 3000 limit on caption-heavy posts
-        // with many reserved characters; revisit if that becomes a real problem.
-        return ['commentary' => $escape ? $this->escape($caption) : $caption];
+        // No mentions: unchanged behaviour, honouring escapeText.
+        if ($mentions === []) {
+            $escape = $options?->escapeText ?? true;
+
+            return ['commentary' => $escape ? $this->escape($caption) : $caption];
+        }
+
+        return ['commentary' => $this->renderMentions($caption, $mentions)];
+    }
+
+    /**
+     * Turn a caption with {{mention:N}} markers into LinkedIn "little text": each
+     * text segment is escaped, each marker becomes @[escaped name](raw urn).
+     * Splitting on the markers first means the {{ }} we consume and the @[]() we
+     * emit never pass through escape(), so there is no collision. escapeText is
+     * intentionally ignored here — with mentions the driver owns escaping end to
+     * end, and honouring it would let raw text sit next to managed mentions and
+     * produce invalid commentary.
+     *
+     * @param list<LinkedInMention> $mentions
+     */
+    protected function renderMentions(string $caption, array $mentions): string
+    {
+        $parts = preg_split('/\{\{mention:(\d+)\}\}/', $caption, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+        if ($parts === false) {
+            return $this->escape($caption);
+        }
+
+        $out = '';
+
+        foreach ($parts as $i => $part) {
+            // Even indices are literal text; odd indices are a captured marker index.
+            if ($i % 2 === 0) {
+                $out .= $this->escape($part);
+
+                continue;
+            }
+
+            $mention = $mentions[(int) $part] ?? null;
+
+            // An orphan marker (no matching entry) is left as literal, escaped text
+            // rather than dropped, so a wrong index is visible and debuggable.
+            $out .= $mention !== null
+                ? '@['.$this->escape($mention->name).']('.$mention->urn.')'
+                : $this->escape('{{mention:'.$part.'}}');
+        }
+
+        return $out;
+    }
+
+    /**
+     * The caption as the reader sees it: {{mention:N}} markers replaced by their
+     * display name, no URNs, no escaping. This is what LinkedIn's length limit
+     * applies to. An orphan marker is left in place (it renders literally).
+     *
+     * @param list<LinkedInMention> $mentions
+     */
+    protected function visibleText(string $caption, array $mentions): string
+    {
+        return preg_replace_callback(
+            '/\{\{mention:(\d+)\}\}/',
+            static fn (array $m): string => ($mentions[(int) $m[1]] ?? null)?->name ?? $m[0],
+            $caption,
+        ) ?? $caption;
+    }
+
+    /**
+     * The caption length cap handed to the generic validator. With mentions the
+     * raw caption contains markers whose length differs from the rendered text, so
+     * the real check moves to validatePlatformRules() and the generic engine is
+     * told not to measure the raw form.
+     */
+    protected function captionMax(PreparedPost $post): int
+    {
+        return ($this->options($post)?->mentions ?? []) === [] ? $this->captionLimit : PHP_INT_MAX;
     }
 
     public function publish(PreparedPost $post): PublishOutcome

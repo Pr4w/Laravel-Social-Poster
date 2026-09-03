@@ -148,9 +148,31 @@ use SocialPoster\Platforms\Instagram\InstagramOptions;
 use SocialPoster\Platforms\LinkedIn\LinkedInOptions;
 
 ->withOptions(new LinkedInOptions(
-    escapeText: false, // keep your hand-built mentions; default true escapes reserved chars
+    escapeText: false, // keep your hand-built "little text"; default true escapes reserved chars
 ))
 ```
+
+**Mentions.** Write readable text with `{{mention:N}}` markers and pass the entities;
+the driver renders LinkedIn's `@[name](urn)` "little text" and escapes everything
+else for you. `N` is the mention's index in the array.
+
+```php
+use SocialPoster\Platforms\LinkedIn\{LinkedInOptions, LinkedInMention};
+
+->caption('Thanks {{mention:0}} and {{mention:1}} for the idea!')
+->withOptions(new LinkedInOptions(
+    mentions: [
+        new LinkedInMention(urn: 'urn:li:person:ABC123', name: 'Mark Hadj Hamou'),
+        new LinkedInMention(urn: 'urn:li:organization:98765', name: 'Acme'),
+    ],
+))
+```
+
+The URN must be `urn:li:person:…` or `urn:li:organization:…`. When any mention is
+present the driver owns escaping, so `escapeText` is ignored; the 3,000-character
+limit is measured against the visible text (names, not URNs). A marker with no
+matching entry is left as literal text. Plain `['urn' => …, 'name' => …]` arrays
+are accepted in place of `LinkedInMention` objects.
 
 ### TikTok
 
