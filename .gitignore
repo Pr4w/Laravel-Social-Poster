@@ -1,0 +1,6 @@
+# OS
+.DS_Store
+
+# Composer (this is a library: dependencies and the lock file are not committed)
+/vendor/
+composer.lock
