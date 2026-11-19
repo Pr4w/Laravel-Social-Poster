@@ -1,0 +1,14 @@
+{
+  "elements": [
+    {
+      "vanityName": "acme",
+      "localizedName": "Acme Inc",
+      "id": 2414183
+    }
+  ],
+  "paging": {
+    "count": 10,
+    "start": 0,
+    "links": []
+  }
+}

@@ -1,0 +1,1 @@
+{"error":{"message":"The media could not be fetched from this uri: https://cdn.example.com/video.mp4","type":"OAuthException","code":-2,"error_subcode":2207003,"is_transient":true,"error_user_title":"Timeout","error_user_msg":"It took too long to download the media.","fbtrace_id":"AQnFbTrace2207003"}}

@@ -1,0 +1,154 @@
+{
+    "token_expired": {
+        "status": 400,
+        "body": {"error": {"message": "Error validating access token: Session has expired on Tuesday, 18-Nov-26 02:00:00 PST. The current time is Tuesday, 18-Nov-26 03:12:45 PST.", "type": "OAuthException", "code": 190, "error_subcode": 463, "fbtrace_id": "AH1x2y3zQ"}}
+    },
+    "token_invalid": {
+        "status": 400,
+        "body": {"error": {"message": "Error validating access token: Session has expired.", "type": "OAuthException", "code": 190, "fbtrace_id": "AXk3l2Pq"}}
+    },
+    "cannot_parse_token": {
+        "status": 400,
+        "body": {"error": {"message": "Invalid OAuth access token - Cannot parse access token", "type": "OAuthException", "code": 190, "fbtrace_id": "A9fK2Lm0"}}
+    },
+    "password_changed": {
+        "status": 400,
+        "body": {"error": {"message": "Error validating access token: The session has been invalidated because the user changed their password or Facebook has changed the session for security reasons.", "type": "OAuthException", "code": 190, "error_subcode": 460, "fbtrace_id": "B1cD2eF3"}}
+    },
+    "daily_limit": {
+        "status": 400,
+        "body": {"error": {"message": "Application request limit reached", "type": "OAuthException", "is_transient": false, "code": 9, "error_subcode": 2207042, "error_user_title": "Max posts reached", "error_user_msg": "You have reached the maximum number of posts that can be published in 24 hours.", "fbtrace_id": "C4dE5fG6"}}
+    },
+    "media_fetch_failed": {
+        "status": 400,
+        "body": {"error": {"message": "Only photo or video can be accepted as media type.", "type": "OAuthException", "is_transient": false, "code": 9004, "error_subcode": 2207052, "error_user_title": "Media download has failed.", "error_user_msg": "The media could not be fetched from this uri: https://cdn.example.com/photo.jpg. Please check the uri and try again.", "fbtrace_id": "D7eF8gH9"}}
+    },
+    "container_expired": {
+        "status": 400,
+        "body": {"error": {"message": "The media you are trying to access has expired. Please try again.", "type": "OAuthException", "is_transient": false, "code": -2, "error_subcode": 2207020, "error_user_title": "Media expired", "error_user_msg": "The media you are trying to access has expired. Please try again.", "fbtrace_id": "E1fG2hI3"}}
+    },
+    "media_builder_expired": {
+        "status": 400,
+        "body": {"error": {"message": "The media builder with creation id = 17900000000000001 does not exist or has been expired.", "type": "OAuthException", "is_transient": false, "code": 24, "error_subcode": 2207008, "error_user_title": "Media builder expired", "fbtrace_id": "F4gH5iJ6"}}
+    },
+    "unknown_upload": {
+        "status": 400,
+        "body": {"error": {"message": "An unknown error occurred while uploading the media.", "type": "OAuthException", "is_transient": false, "code": -1, "error_subcode": 2207053, "error_user_title": "Unknown upload error", "error_user_msg": "There was an unknown error uploading the media. Please generate a new container and try again.", "fbtrace_id": "G7hI8jK9"}}
+    },
+    "media_not_found": {
+        "status": 400,
+        "body": {"error": {"message": "The media with id 17900000000000001 cannot be found.", "type": "OAuthException", "is_transient": false, "code": 24, "error_subcode": 2207006, "error_user_title": "Media not found", "fbtrace_id": "H1iJ2kL3"}}
+    },
+    "server_error": {
+        "status": 500,
+        "body": {"error": {"message": "Instagram server error", "type": "OAuthException", "is_transient": true, "code": -1, "error_subcode": 2207001, "error_user_title": "Instagram server error", "error_user_msg": "Instagram server error, please try again.", "fbtrace_id": "I4jK5lM6"}}
+    },
+    "download_timeout": {
+        "status": 400,
+        "body": {"error": {"message": "Timeout downloading media", "type": "OAuthException", "is_transient": true, "code": -2, "error_subcode": 2207003, "error_user_title": "Media download timed out", "error_user_msg": "It took too long to download the media.", "fbtrace_id": "J7kL8mN9"}}
+    },
+    "create_failed": {
+        "status": 400,
+        "body": {"error": {"message": "Create media fail, please try to re-create media", "type": "OAuthException", "is_transient": true, "code": -1, "error_subcode": 2207032, "error_user_title": "Create media failed", "fbtrace_id": "K1lM2nO3"}}
+    },
+    "not_ready": {
+        "status": 400,
+        "body": {"error": {"message": "Media ID is not available", "type": "OAuthException", "is_transient": false, "code": 9007, "error_subcode": 2207027, "error_user_title": "Media not ready for publishing", "error_user_msg": "The media is not ready for publishing, please wait for a moment.", "fbtrace_id": "L4mN5oP6"}}
+    },
+    "unsupported_video": {
+        "status": 400,
+        "body": {"error": {"message": "The video format is not supported. Please check spec for supported format.", "type": "OAuthException", "is_transient": false, "code": 352, "error_subcode": 2207026, "error_user_title": "Unsupported video format", "error_user_msg": "The video format is not supported. Please check spec for supported format.", "fbtrace_id": "M7nO8pQ9"}}
+    },
+    "image_too_large": {
+        "status": 400,
+        "body": {"error": {"message": "The image is too large to download. It should be less than 8 MiB.", "type": "OAuthException", "code": 36000, "error_subcode": 2207004, "error_user_title": "Image too large", "fbtrace_id": "N1oP2qR3"}}
+    },
+    "image_format": {
+        "status": 400,
+        "body": {"error": {"message": "The image format is not supported.", "type": "OAuthException", "code": 36001, "error_subcode": 2207005, "error_user_title": "Unsupported image format", "fbtrace_id": "O4pQ5rS6"}}
+    },
+    "aspect_ratio": {
+        "status": 400,
+        "body": {"error": {"message": "The submitted image with aspect ratio ('0.5'/1) cannot be published. Please submit an image with a valid aspect ratio.", "type": "OAuthException", "code": 36003, "error_subcode": 2207009, "error_user_title": "Aspect ratio not supported", "fbtrace_id": "P7qR8sT9"}}
+    },
+    "caption_too_long": {
+        "status": 400,
+        "body": {"error": {"message": "The caption you provided is invalid.", "type": "OAuthException", "code": 36004, "error_subcode": 2207010, "error_user_title": "Caption too long", "error_user_msg": "The caption was too long, or contained too many hashtags or @mentions.", "fbtrace_id": "Q1rS2tU3"}}
+    },
+    "carousel_count": {
+        "status": 400,
+        "body": {"error": {"message": "Carousels must have between 2 and 10 items.", "type": "OAuthException", "code": 100, "error_subcode": 2207028, "error_user_title": "Carousel validation failed", "fbtrace_id": "R4sT5uV6"}}
+    },
+    "unknown_media_type": {
+        "status": 400,
+        "body": {"error": {"message": "The media type is unknown.", "type": "OAuthException", "code": 100, "error_subcode": 2207023, "error_user_title": "Unknown media type", "fbtrace_id": "S7tU8vW9"}}
+    },
+    "too_many_tags": {
+        "status": 400,
+        "body": {"error": {"message": "Cannot use more than 20 tags per created media.", "type": "OAuthException", "code": 100, "error_subcode": 2207040, "error_user_title": "Too many tags", "fbtrace_id": "T1uV2wX3"}}
+    },
+    "bad_thumb_offset": {
+        "status": 400,
+        "body": {"error": {"message": "Thumbnail offset is invalid.", "type": "OAuthException", "code": 1, "error_subcode": 2207057, "error_user_title": "Invalid thumbnail offset", "fbtrace_id": "U4vW5xY6"}}
+    },
+    "product_tags": {
+        "status": 400,
+        "body": {"error": {"message": "The product tags are invalid.", "type": "OAuthException", "code": 100, "error_subcode": 2207035, "fbtrace_id": "V7wX8yZ9"}}
+    },
+    "restricted": {
+        "status": 400,
+        "body": {"error": {"message": "The user is restricted from performing this action.", "type": "OAuthException", "code": 25, "error_subcode": 2207050, "error_user_title": "Restricted account", "fbtrace_id": "W1xY2zA3"}}
+    },
+    "spam_block": {
+        "status": 400,
+        "body": {"error": {"message": "Application request limit reached", "type": "OAuthException", "is_transient": false, "code": 4, "error_subcode": 2207051, "error_user_title": "Action is blocked", "error_user_msg": "We restrict certain activity to protect our community. Tell us if you think that we made a mistake.", "fbtrace_id": "X4yZ5aB6"}}
+    },
+    "too_many_actions": {
+        "status": 400,
+        "body": {"error": {"message": "Performing too many actions", "type": "OAuthException", "code": 4, "error_subcode": 2207069, "error_user_title": "Too many actions", "fbtrace_id": "Y7zA8bC9"}}
+    },
+    "not_business": {
+        "status": 400,
+        "body": {"error": {"message": "(#10) The user is not an Instagram Business", "type": "OAuthException", "code": 10, "fbtrace_id": "Z1aB2cD3"}}
+    },
+    "unexpected_error": {
+        "status": 400,
+        "body": {"error": {"message": "An unexpected error has occurred. Please retry your request later.", "type": "OAuthException", "code": 100, "fbtrace_id": "A2bC3dE4"}}
+    },
+    "reduce_data": {
+        "status": 400,
+        "body": {"error": {"message": "Please reduce the amount of data you're asking for, then retry your request", "type": "OAuthException", "code": 100, "fbtrace_id": "B3cD4eF5"}}
+    },
+    "app_throttle": {
+        "status": 400,
+        "body": {"error": {"message": "(#4) Application request limit reached", "type": "OAuthException", "is_transient": true, "code": 4, "fbtrace_id": "C4dE5fG6"}}
+    },
+    "user_throttle": {
+        "status": 400,
+        "body": {"error": {"message": "(#17) User request limit reached", "type": "OAuthException", "is_transient": true, "code": 17, "error_subcode": 2446079, "fbtrace_id": "D5eF6gH7"}}
+    },
+    "permission": {
+        "status": 403,
+        "body": {"error": {"message": "(#10) Application does not have permission for this action", "type": "OAuthException", "code": 10, "fbtrace_id": "E6fG7hI8"}}
+    },
+    "comment_permission": {
+        "status": 400,
+        "body": {"error": {"message": "(#200) Requires instagram_manage_comments permission to manage the object", "type": "OAuthException", "code": 200, "fbtrace_id": "F7gH8iJ9"}}
+    },
+    "object_missing": {
+        "status": 400,
+        "body": {"error": {"message": "Unsupported get request. Object with ID '17841400000000001' does not exist, cannot be loaded due to missing permissions, or does not support this operation. Please read the Graph API documentation at https://developers.facebook.com/docs/graph-api", "type": "GraphMethodException", "code": 100, "error_subcode": 33, "fbtrace_id": "G8hI9jK0"}}
+    },
+    "invalid_parameter": {
+        "status": 400,
+        "body": {"error": {"message": "(#100) Invalid parameter", "type": "OAuthException", "code": 100, "fbtrace_id": "H9iJ0kL1"}}
+    },
+    "html_502": {
+        "status": 502,
+        "body": "<html><head><title>502 Bad Gateway</title></head><body>Bad Gateway</body></html>"
+    },
+    "graph_503": {
+        "status": 503,
+        "body": {"error": {"message": "Service temporarily unavailable", "type": "OAuthException", "is_transient": true, "code": 2, "fbtrace_id": "I0jK1lM2"}}
+    }
+}

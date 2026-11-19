@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request does not include the video content.",
+        "errors": [
+            {
+                "message": "The request does not include the video content.",
+                "domain": "youtube.video",
+                "reason": "mediaBodyRequired"
+            }
+        ]
+    }
+}

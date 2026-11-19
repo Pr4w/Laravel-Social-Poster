@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The comment resource that is being inserted or updated contains too many characters in the snippet.topLevelComment.snippet.textOriginal property.",
+        "errors": [
+            {
+                "message": "The comment resource that is being inserted or updated contains too many characters in the snippet.topLevelComment.snippet.textOriginal property.",
+                "domain": "youtube.commentThread",
+                "reason": "commentTextTooLong"
+            }
+        ]
+    }
+}

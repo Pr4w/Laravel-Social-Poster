@@ -1,0 +1,6 @@
+{
+  "title": "Forbidden",
+  "detail": "You are not permitted to perform this action.",
+  "type": "about:blank",
+  "status": 403
+}

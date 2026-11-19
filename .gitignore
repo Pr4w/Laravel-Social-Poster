@@ -4,3 +4,8 @@
 # Composer (this is a library: dependencies and the lock file are not committed)
 /vendor/
 composer.lock
+
+# Test and tool caches
+/.phpunit.cache/
+.phpunit.result.cache
+/build/

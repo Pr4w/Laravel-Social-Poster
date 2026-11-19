@@ -1,0 +1,15 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request metadata specifies an invalid video description.",
+        "errors": [
+            {
+                "message": "The request metadata specifies an invalid video description.",
+                "domain": "youtube.video",
+                "reason": "invalidDescription",
+                "location": "body.snippet.description",
+                "locationType": "other"
+            }
+        ]
+    }
+}

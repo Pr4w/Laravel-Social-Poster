@@ -31,6 +31,6 @@ final class RawOptions implements PlatformOptions
 
     public function validate(): MessageBag
     {
-        return new MessageBag();
+        return new MessageBag;
     }
 }

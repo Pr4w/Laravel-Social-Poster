@@ -1,0 +1,6 @@
+{
+  "title": "Not Found Error",
+  "detail": "Could not find media with id: [1880028106020515842].",
+  "type": "https://api.twitter.com/2/problems/resource-not-found",
+  "status": 404
+}

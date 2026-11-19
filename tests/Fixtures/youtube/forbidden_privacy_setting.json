@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "The request attempts to set an invalid privacy setting for the video.",
+        "errors": [
+            {
+                "message": "The request attempts to set an invalid privacy setting for the video.",
+                "domain": "youtube.video",
+                "reason": "forbiddenPrivacySetting"
+            }
+        ]
+    }
+}

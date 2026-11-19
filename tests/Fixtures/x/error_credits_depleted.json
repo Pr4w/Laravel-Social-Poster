@@ -1,0 +1,6 @@
+{
+  "account_id": 1234567890,
+  "title": "CreditsDepleted",
+  "detail": "Your enrolled account [1234567890] does not have any credits to fulfill this request.",
+  "type": "https://api.twitter.com/2/problems/credits"
+}

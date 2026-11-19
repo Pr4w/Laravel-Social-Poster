@@ -1,0 +1,12 @@
+{
+  "elements": [
+    {
+      "member": "urn:li:person:Jd0eXyZ12",
+      "vanityUrl": "https://www.linkedin.com/in/jane-doe"
+    }
+  ],
+  "paging": {
+    "count": 10,
+    "start": 0
+  }
+}

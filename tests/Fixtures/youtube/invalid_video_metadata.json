@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request metadata is invalid.",
+        "errors": [
+            {
+                "message": "The request metadata is invalid.",
+                "domain": "youtube.video",
+                "reason": "invalidVideoMetadata"
+            }
+        ]
+    }
+}

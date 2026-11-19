@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "Daily Limit Exceeded. The quota will be reset at midnight Pacific Time (PT).",
+        "errors": [
+            {
+                "message": "Daily Limit Exceeded. The quota will be reset at midnight Pacific Time (PT).",
+                "domain": "usageLimits",
+                "reason": "dailyLimitExceeded"
+            }
+        ]
+    }
+}

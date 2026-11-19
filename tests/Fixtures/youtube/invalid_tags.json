@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request metadata specifies invalid video keywords.",
+        "errors": [
+            {
+                "message": "The request metadata specifies invalid video keywords.",
+                "domain": "youtube.video",
+                "reason": "invalidTags"
+            }
+        ]
+    }
+}

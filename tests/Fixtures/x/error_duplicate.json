@@ -1,0 +1,6 @@
+{
+  "detail": "You are not allowed to create a Tweet with duplicate content.",
+  "type": "about:blank",
+  "title": "Forbidden",
+  "status": 403
+}

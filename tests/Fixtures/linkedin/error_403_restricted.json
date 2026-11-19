@@ -1,0 +1,6 @@
+{
+  "status": 403,
+  "serviceErrorCode": 65603,
+  "code": "RESTRICTED_MEMBER",
+  "message": "Member is restricted"
+}

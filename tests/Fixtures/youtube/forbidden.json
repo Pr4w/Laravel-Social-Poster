@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "Access forbidden. The request may not be properly authorized.",
+        "errors": [
+            {
+                "message": "Access forbidden. The request may not be properly authorized.",
+                "domain": "youtube.video",
+                "reason": "forbidden"
+            }
+        ]
+    }
+}

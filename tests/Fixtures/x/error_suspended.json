@@ -1,0 +1,6 @@
+{
+  "title": "Forbidden",
+  "detail": "Your account is suspended and is not permitted to access this feature.",
+  "type": "about:blank",
+  "status": 403
+}

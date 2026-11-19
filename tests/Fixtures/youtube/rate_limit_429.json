@@ -1,0 +1,14 @@
+{
+    "error": {
+        "code": 429,
+        "message": "Too many requests.",
+        "errors": [
+            {
+                "message": "Too many requests.",
+                "domain": "global",
+                "reason": "rateLimitExceeded"
+            }
+        ],
+        "status": "RESOURCE_EXHAUSTED"
+    }
+}

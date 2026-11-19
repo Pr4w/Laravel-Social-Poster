@@ -1,0 +1,1 @@
+{"error":{"message":"Invalid parameter","type":"THApiException","code":100,"error_subcode":4279026,"error_data":{"error_code":"THREADS_API__LINK_LIMIT_EXCEEDED"},"error_user_title":"Too many links","error_user_msg":"Posts can contain at most 5 links.","fbtrace_id":"M3n4O5p6Q7r8S9t0U1v2W3x"}}

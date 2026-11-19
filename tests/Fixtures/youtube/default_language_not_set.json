@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request is trying to add localized video details without specifying the default language of the video details.",
+        "errors": [
+            {
+                "message": "The request is trying to add localized video details without specifying the default language of the video details.",
+                "domain": "youtube.video",
+                "reason": "defaultLanguageNotSet"
+            }
+        ]
+    }
+}

@@ -1,0 +1,15 @@
+{
+  "media_id": "5212123920968240771",
+  "media_type": "video",
+  "upload_url": "https://pinterest-media-upload.s3-accelerate.amazonaws.com/",
+  "upload_parameters": {
+    "x-amz-date": "20261118T100000Z",
+    "x-amz-signature": "fcd6309a6aaee213348666a72abed8b44552a43acb6b340e8e1b288d21a5fe92",
+    "x-amz-security-token": "IQoJb3JpZ2luX2VjEJr...==",
+    "x-amz-algorithm": "AWS4-HMAC-SHA256",
+    "key": "uploads/11/aa/22/3:video:203014033110991560:5212123920968240771",
+    "policy": "eyJleHBpcmF0aW9uIjoiMj..==",
+    "x-amz-credential": "ASIA6QZJ64OPIKV7FRVX/20261118/us-east-1/s3/aws4_request",
+    "Content-Type": "multipart/form-data"
+  }
+}

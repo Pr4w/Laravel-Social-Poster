@@ -1,0 +1,10 @@
+{
+    "uri": "at://did:plc:4vx5zk2wrb7qmaz3rdc6yjfo/app.bsky.feed.post/3m5kqzw7yx22c",
+    "cid": "bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm",
+    "value": {
+        "$type": "app.bsky.feed.post",
+        "createdAt": "2026-11-18T10:00:00.000Z",
+        "langs": ["en"],
+        "text": "Hello Bluesky"
+    }
+}

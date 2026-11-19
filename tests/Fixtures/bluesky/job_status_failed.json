@@ -1,0 +1,10 @@
+{
+    "jobStatus": {
+        "did": "did:plc:4vx5zk2wrb7qmaz3rdc6yjfo",
+        "jobId": "N3d1PKq9xgdCSGuTNOSpw",
+        "state": "JOB_STATE_FAILED",
+        "error": "Video failed validation",
+        "message": "Unsupported video codec",
+        "failureCode": "validation_failure"
+    }
+}

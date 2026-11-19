@@ -13,10 +13,18 @@ use SocialPoster\ValueObjects\PostResult;
  * already-published post becomes a no-op replay instead of a duplicate.
  *
  * It also persists the in-flight async state so a retry resumes the existing
- * upload rather than starting a new one. The residual window it cannot close is
- * a crash between the platform call returning and markPublished writing, which is
- * irreducible without platform-side idempotency keys (which the social APIs do
- * not offer).
+ * upload rather than starting a new one.
+ *
+ * This interface only remembers outcomes after the fact. It cannot stop two
+ * workers that run the same key at the same time, and it cannot see a create
+ * call that timed out after the platform accepted it. Stores that implement
+ * AtomicIdempotencyStore add a lease and a 'committing' status for those cases;
+ * the first-party stores all do. Even then, a request that the platform accepted
+ * but whose answer never came back can only be resolved by checking the
+ * platform, which the drivers do when a run is flagged as recovering.
+ *
+ * Implementations should never delete or downgrade a 'published' record: a
+ * published key must keep replaying, or the next retry posts again.
  */
 interface IdempotencyStore
 {
@@ -29,9 +37,9 @@ interface IdempotencyStore
     /** The persisted in-flight async state for this key, or null. */
     public function pendingState(string $key): ?array;
 
-    /** Persist the in-flight async state so a retry resumes instead of re-creating. */
+    /** Persist the in-flight async state so a retry resumes instead of re-creating. Never overwrites a published record. */
     public function markPending(string $key, array $state): void;
 
-    /** Clear the key (e.g. on permanent failure) so a fresh post can proceed. */
+    /** Clear the key (e.g. on permanent failure) so a fresh post can proceed. Published records are kept. */
     public function forget(string $key): void;
 }

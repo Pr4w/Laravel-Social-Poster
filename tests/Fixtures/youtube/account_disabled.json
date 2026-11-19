@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "The authenticated account is disabled.",
+        "errors": [
+            {
+                "message": "The authenticated account is disabled.",
+                "domain": "global",
+                "reason": "accountDisabled"
+            }
+        ]
+    }
+}

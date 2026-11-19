@@ -1,0 +1,15 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request metadata specifies an invalid video title.",
+        "errors": [
+            {
+                "message": "The request metadata specifies an invalid video title.",
+                "domain": "youtube.video",
+                "reason": "invalidTitle",
+                "location": "body.snippet.title",
+                "locationType": "other"
+            }
+        ]
+    }
+}

@@ -1,0 +1,15 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request metadata specifies an invalid scheduled publishing time.",
+        "errors": [
+            {
+                "message": "The request metadata specifies an invalid scheduled publishing time.",
+                "domain": "youtube.video",
+                "reason": "invalidPublishAt",
+                "location": "body.status.publishAt",
+                "locationType": "other"
+            }
+        ]
+    }
+}

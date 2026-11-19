@@ -1,0 +1,12 @@
+{
+  "errors": [
+    {
+      "message": "To protect our users from spam and other malicious activity, this account is temporarily locked. Please log in to https://x.com to unlock your account.",
+      "code": 326
+    }
+  ],
+  "title": "Forbidden",
+  "detail": "Forbidden",
+  "type": "about:blank",
+  "status": 403
+}

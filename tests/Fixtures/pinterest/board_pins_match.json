@@ -1,0 +1,23 @@
+{
+  "items": [
+    {
+      "id": "813744226420795001",
+      "created_at": "2026-11-17T08:12:44",
+      "title": "Spring collection",
+      "description": "New spring collection is live: https://example.com/spring.",
+      "link": "https://example.com/spring",
+      "board_id": "987654321012345678",
+      "board_section_id": null
+    },
+    {
+      "id": "813744226420795884",
+      "created_at": "2026-11-18T10:00:02",
+      "title": "Spring collection",
+      "description": "New spring collection is live: https://example.com/spring.",
+      "link": "https://example.com/spring?utm_source=pinterest",
+      "board_id": "987654321012345678",
+      "board_section_id": null
+    }
+  ],
+  "bookmark": "Y2JVSG81V2sxcmNHRlpWM1J5VFVaV05WUnNaRlJpUm5Bd1ZERlNVMVp0UlhsbFJGWldZbFJHVkZWV1pFZFNiVVY1"
+}

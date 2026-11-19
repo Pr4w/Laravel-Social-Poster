@@ -14,6 +14,11 @@ use SocialPoster\Enums\Platform;
  * we deliberately do not model (Instagram trial_params, X reply_settings, and so
  * on) reach the API without the package mirroring every vendor field. Anything in
  * extra() is unvalidated by design, and driver-computed keys win on collision.
+ *
+ * platform() scopes the object: since 1.1 a fan-out takes one options object per
+ * platform (->withOptions($instagram, $linkedIn)) and each driver receives only
+ * its own through PreparedPost::options(). Drivers still check the type (or
+ * platform()) before use, since a post built by v1.0 carries a single object.
  */
 interface PlatformOptions
 {

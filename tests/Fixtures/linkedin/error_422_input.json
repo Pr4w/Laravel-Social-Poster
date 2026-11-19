@@ -1,0 +1,27 @@
+{
+  "errorDetailType": "com.linkedin.common.error.BadRequest",
+  "message": "Multiple errors occurred during the input validation. Please see errorDetails for more information.",
+  "errorDetails": {
+    "inputErrors": [
+      {
+        "description": "Invalid value for field; wrong type or other syntax error",
+        "input": {
+          "inputPath": {
+            "fieldPath": "/commentary"
+          }
+        },
+        "code": "INVALID_VALUE_FOR_FIELD"
+      },
+      {
+        "description": "Field Value exceeds maximum length",
+        "input": {
+          "inputPath": {
+            "fieldPath": "/commentary"
+          }
+        },
+        "code": "FIELD_LENGTH_TOO_LONG"
+      }
+    ]
+  },
+  "status": 422
+}

@@ -33,9 +33,14 @@ final class PreparedPost
         return $this->post->title;
     }
 
+    /**
+     * This platform's options: its own entry from ->withOptions(), else the
+     * post's single v1.0 options object (which, in a v1.0 fan-out, may belong
+     * to another platform, so drivers keep checking the type or platform()).
+     */
     public function options(): ?PlatformOptions
     {
-        return $this->post->options;
+        return $this->post->optionsFor($this->platform);
     }
 
     /** @return array<string, mixed> Opaque caller correlation data; never sent to the platform. */
@@ -49,6 +54,7 @@ final class PreparedPost
         return $this->post->comment;
     }
 
+    /** @return array{media: Media[], caption: ?string, title: ?string, metadata: array<string, mixed>} */
     public function toArray(): array
     {
         return $this->post->toArray();

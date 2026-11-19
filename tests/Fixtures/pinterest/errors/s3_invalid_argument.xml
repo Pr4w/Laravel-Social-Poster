@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>InvalidArgument</Code><Message>Bucket POST must contain a field named 'key'.</Message><ArgumentName>key</ArgumentName><RequestId>0A1B2C3D4E5F6A7B</RequestId></Error>

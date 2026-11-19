@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }} (${{ matrix.stability }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4', '8.5']
+        laravel: ['11.*', '12.*', '13.*']
+        stability: [prefer-lowest, prefer-stable]
+        exclude:
+          # Laravel 13 requires PHP 8.3+.
+          - php: '8.2'
+            laravel: '13.*'
+          # Laravel 11 is not tested on PHP 8.5.
+          - php: '8.5'
+            laravel: '11.*'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, json, fileinfo, openssl, intl, gd, pdo_sqlite, pcntl, posix
+          coverage: none
+
+      - name: Install ffprobe
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction --no-progress
+
+      - name: Run tests
+        run: vendor/bin/pest --testsuite=Unit,Feature,Database
+
+  # The duplicate-protection core on the databases and caches production uses.
+  # The suite above runs on in-memory SQLite and the array cache; these jobs
+  # run the idempotency stores, their migrations (fresh install and the v1.0
+  # upgrade with the key_hash backfill), reconcile, and the forked-worker claim
+  # races on each server: DatabaseIdempotencyStore's insert-or-ignore and
+  # affected-row checks differ per dialect, and the cache leases rely on each
+  # driver's own owner-checked lock release (redis, memcached, database).
+  databases:
+    name: ${{ matrix.database.name }} / Laravel ${{ matrix.laravel }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        laravel: ['11.*', '13.*']
+        database:
+          - name: MySQL 8.4
+            connection: mysql
+            image: mysql:8.4
+            port: 3306
+            username: root
+            health: mysqladmin ping -h 127.0.0.1 -uroot -ppassword
+          - name: MariaDB 11.4
+            connection: mariadb
+            image: mariadb:11.4
+            port: 3306
+            username: root
+            health: healthcheck.sh --connect --innodb_initialized
+          - name: PostgreSQL 17
+            connection: pgsql
+            image: postgres:17
+            port: 5432
+            username: postgres
+            health: pg_isready -U postgres
+
+    services:
+      database:
+        image: ${{ matrix.database.image }}
+        env:
+          # Each image reads its own variables and ignores the others.
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: testing
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: testing
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testing
+        ports:
+          - ${{ matrix.database.port }}:${{ matrix.database.port }}
+        options: >-
+          --health-cmd="${{ matrix.database.health }}"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      memcached:
+        image: memcached:1.6
+        ports:
+          - 11211:11211
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, json, fileinfo, openssl, intl, gd, pdo_sqlite, pdo_mysql, pdo_pgsql, redis, memcached, pcntl, posix
+          coverage: none
+
+      - name: Install dependencies
+        run: |
+          composer require "laravel/framework:${{ matrix.laravel }}" --no-interaction --no-update
+          composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+
+      - name: Run the idempotency tests on ${{ matrix.database.name }}, redis and memcached
+        env:
+          DB_CONNECTION: ${{ matrix.database.connection }}
+          DB_HOST: 127.0.0.1
+          DB_PORT: ${{ matrix.database.port }}
+          # The suite drops every table before each test, and refuses a database whose name lacks "test".
+          DB_DATABASE: testing
+          DB_USERNAME: ${{ matrix.database.username }}
+          DB_PASSWORD: password
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          MEMCACHED_HOST: 127.0.0.1
+          MEMCACHED_PORT: 11211
+        # The excluded test swaps the SQLite query grammar in to simulate SQL
+        # Server, so it can only run on SQLite (the job above covers it).
+        run: >-
+          vendor/bin/pest
+          tests/Unit/Idempotency
+          tests/Feature/ReconcileTest.php
+          tests/Database
+          --exclude-filter='such.as.SQL.Server'
+
+  quality:
+    name: Static analysis and style
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, json, fileinfo, openssl, intl, gd
+          coverage: none
+      - run: composer validate --strict
+      - run: composer update --prefer-dist --no-interaction --no-progress
+      - run: vendor/bin/pint --test
+      - run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress

@@ -8,6 +8,11 @@ use SocialPoster\ValueObjects\Media;
  * Turns a Media into the form a platform needs: a public URL it can pull, or a
  * local path to the bytes it must be given. This is where the local-vs-remote
  * distinction is resolved, isolated from every driver.
+ *
+ * Shipped implementations: LocalMediaGateway (default: passes URLs through,
+ * downloads remote media with SSRF, timeout and size guards) and
+ * FilesystemMediaGateway (also re-hosts local files on a public disk so
+ * pull-only platforms can fetch them). Both understand Media::fromDisk().
  */
 interface MediaGateway
 {

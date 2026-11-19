@@ -1,0 +1,6 @@
+{
+  "status": 401,
+  "serviceErrorCode": 65602,
+  "code": "EXPIRED_ACCESS_TOKEN",
+  "message": "The token used in the request has expired"
+}

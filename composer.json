@@ -1,20 +1,61 @@
 {
     "name": "pr4w/laravel-social-poster",
-    "description": "A cleanly-architected Laravel package for publishing content to multiple social platforms.",
+    "description": "Publish posts, carousels, videos, stories and first comments to Facebook, Instagram, Threads, X, LinkedIn, TikTok, YouTube, Bluesky and Pinterest from Laravel, with queue-safe retries and duplicate protection.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "laravel",
+        "social",
+        "social-media",
+        "publishing",
+        "facebook",
+        "instagram",
+        "threads",
+        "twitter",
+        "x",
+        "linkedin",
+        "tiktok",
+        "youtube",
+        "bluesky",
+        "pinterest"
+    ],
     "require": {
         "php": "^8.2",
-        "illuminate/support": "^11.0|^12.0|^13.0",
-        "illuminate/bus": "^11.0|^12.0|^13.0",
-        "illuminate/queue": "^11.0|^12.0|^13.0",
-        "illuminate/contracts": "^11.0|^12.0|^13.0",
-        "symfony/process": "^8.0"
+        "ext-fileinfo": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
+        "guzzlehttp/guzzle": "^7.8",
+        "laravel/framework": "^11.0|^12.0|^13.0",
+        "symfony/process": "^7.0|^8.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0"
+    },
+    "suggest": {
+        "ext-intl": "Accurate grapheme counting for Bluesky and Threads caption limits.",
+        "ext-dom": "Bluesky link cards (Open Graph parsing); without it, link cards are skipped.",
+        "ext-gd": "Built-in PNG/WebP to JPEG conversion (ImageConvertingTransformer) and downscaling of Bluesky link-card thumbnails.",
+        "ext-imagick": "Alternative backend for the built-in image conversion and link-card thumbnail downscaling.",
+        "pr4w/laravel-social-tokens": "OAuth token storage and refresh; plugs in through the CredentialsResolver hook."
     },
     "autoload": {
         "psr-4": {
             "SocialPoster\\": "src/"
         }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SocialPoster\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "format": "pint"
     },
     "extra": {
         "laravel": {
@@ -24,6 +65,12 @@
             "aliases": {
                 "SocialPoster": "SocialPoster\\Facades\\SocialPoster"
             }
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
         }
     },
     "minimum-stability": "stable",

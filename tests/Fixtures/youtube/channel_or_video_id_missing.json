@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The comment thread must specify a channel or video.",
+        "errors": [
+            {
+                "message": "The comment thread must specify a channel or video.",
+                "domain": "youtube.commentThread",
+                "reason": "channelOrVideoIdMissing"
+            }
+        ]
+    }
+}

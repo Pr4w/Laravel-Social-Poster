@@ -1,0 +1,14 @@
+{
+  "actor": "urn:li:person:8675309Ab_c",
+  "commentUrn": "urn:li:comment:(urn:li:activity:7012345678901234999,7012399999999999999)",
+  "created": {
+    "actor": "urn:li:person:8675309Ab_c",
+    "time": 1700000000000
+  },
+  "id": "7012399999999999999",
+  "message": {
+    "text": "First comment"
+  },
+  "object": "urn:li:share:7012345678901234567",
+  "$URN": "urn:li:comment:(urn:li:activity:7012345678901234999,7012399999999999999)"
+}

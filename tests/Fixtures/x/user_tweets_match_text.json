@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": "1880028106020515001",
+      "text": "Something else entirely",
+      "created_at": "2026-11-18T10:00:00.000Z",
+      "edit_history_tweet_ids": [
+        "1880028106020515001"
+      ]
+    },
+    {
+      "id": "1880028106020515840",
+      "text": "Fish &amp; chips at https://t.co/AbCdEf123 tonight",
+      "created_at": "2026-11-18T10:01:00.000Z",
+      "edit_history_tweet_ids": [
+        "1880028106020515840"
+      ]
+    }
+  ],
+  "meta": {
+    "result_count": 2,
+    "newest_id": "1880028106020515840",
+    "oldest_id": "1880028106020515001"
+  }
+}

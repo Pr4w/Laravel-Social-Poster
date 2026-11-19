@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The request metadata specifies an invalid video game rating.",
+        "errors": [
+            {
+                "message": "The request metadata specifies an invalid video game rating.",
+                "domain": "youtube.video",
+                "reason": "invalidVideoGameRating"
+            }
+        ]
+    }
+}

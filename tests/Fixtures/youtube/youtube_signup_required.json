@@ -1,0 +1,15 @@
+{
+    "error": {
+        "code": 401,
+        "message": "Unauthorized",
+        "errors": [
+            {
+                "message": "Unauthorized",
+                "domain": "youtube.header",
+                "reason": "youtubeSignupRequired",
+                "location": "Authorization",
+                "locationType": "header"
+            }
+        ]
+    }
+}

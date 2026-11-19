@@ -1,0 +1,25 @@
+{
+  "id": "813744226420795884",
+  "created_at": "2026-11-18T10:00:02",
+  "link": "https://example.com/spring",
+  "title": "Spring collection",
+  "description": "New spring collection is live: https://example.com/spring.",
+  "dominant_color": "#6E7874",
+  "alt_text": null,
+  "creative_type": "REGULAR",
+  "board_id": "987654321012345678",
+  "board_section_id": null,
+  "board_owner": {"username": "acmestudio"},
+  "is_owner": true,
+  "is_standard": true,
+  "has_been_promoted": false,
+  "parent_pin_id": null,
+  "note": "",
+  "media": {
+    "media_type": "image",
+    "images": {
+      "150x150": {"width": 150, "height": 150, "url": "https://i.pinimg.com/150x150/0d/f6/f1/0df6f1f0bfe7aaca849c1bbc3607a34b.jpg"},
+      "originals": {"width": 1000, "height": 1500, "url": "https://i.pinimg.com/originals/0d/f6/f1/0df6f1f0bfe7aaca849c1bbc3607a34b.jpg"}
+    }
+  }
+}

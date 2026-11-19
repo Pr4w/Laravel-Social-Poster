@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "The YouTube account used to authorize the API request must be merged with the user's Google account.",
+        "errors": [
+            {
+                "message": "The YouTube account used to authorize the API request must be merged with the user's Google account.",
+                "domain": "youtube.commentThread",
+                "reason": "ineligibleAccount"
+            }
+        ]
+    }
+}

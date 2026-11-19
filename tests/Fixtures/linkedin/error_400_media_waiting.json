@@ -1,0 +1,18 @@
+{
+  "errorDetailType": "com.linkedin.common.error.BadRequest",
+  "message": "Multiple errors occurred during the input validation. Please see errorDetails for more information.",
+  "errorDetails": {
+    "inputErrors": [
+      {
+        "description": "Media asset is still waiting for the upload",
+        "input": {
+          "inputPath": {
+            "fieldPath": "/content/media/id"
+          }
+        },
+        "code": "MEDIA_ASSET_WAITING_UPLOAD"
+      }
+    ]
+  },
+  "status": 400
+}

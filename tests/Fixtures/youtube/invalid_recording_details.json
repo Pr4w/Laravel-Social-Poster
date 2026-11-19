@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The recordingDetails object in the request metadata specifies invalid recording details.",
+        "errors": [
+            {
+                "message": "The recordingDetails object in the request metadata specifies invalid recording details.",
+                "domain": "youtube.video",
+                "reason": "invalidRecordingDetails"
+            }
+        ]
+    }
+}

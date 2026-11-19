@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "813744226420795001",
+      "created_at": "2026-11-17T08:12:44",
+      "title": "Spring collection",
+      "description": "New spring collection is live: https://example.com/spring.",
+      "board_id": "987654321012345678"
+    },
+    {
+      "id": "813744226420795002",
+      "created_at": "2026-11-18T10:00:30-00:00",
+      "title": "Autumn collection",
+      "description": "Something else entirely.",
+      "board_id": "987654321012345678"
+    }
+  ],
+  "bookmark": null
+}

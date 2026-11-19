@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "The authenticated user doesn't have permissions to upload and set custom video thumbnails.",
+        "errors": [
+            {
+                "message": "The authenticated user doesn't have permissions to upload and set custom video thumbnails.",
+                "domain": "youtube.thumbnail",
+                "reason": "forbidden"
+            }
+        ]
+    }
+}

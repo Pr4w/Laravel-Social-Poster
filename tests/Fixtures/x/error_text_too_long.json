@@ -1,0 +1,15 @@
+{
+  "errors": [
+    {
+      "parameters": {
+        "text": [
+          "(281 characters)"
+        ]
+      },
+      "message": "Your Tweet text is too long. For more information on how X determines text length see https://github.com/twitter/twitter-text."
+    }
+  ],
+  "title": "Invalid Request",
+  "detail": "One or more parameters to your request was invalid.",
+  "type": "https://api.twitter.com/2/problems/invalid-request"
+}

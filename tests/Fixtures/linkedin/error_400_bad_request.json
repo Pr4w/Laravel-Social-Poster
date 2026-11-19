@@ -1,0 +1,5 @@
+{
+  "status": 400,
+  "code": "BAD_REQUEST",
+  "message": "Invalid visibility for author type"
+}

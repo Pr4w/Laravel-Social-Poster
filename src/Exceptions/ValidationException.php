@@ -24,7 +24,7 @@ class ValidationException extends SocialPosterException
         parent::__construct(
             static::describe($message, $errors),
             $platform,
-            FailureReason::Unknown,
+            FailureReason::Validation,
             $context + ['errors' => $errors->toArray()],
         );
     }

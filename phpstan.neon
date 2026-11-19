@@ -1,0 +1,19 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - src
+        - config
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        # Driver hooks receive Illuminate\Http\Client\Response but are untyped in 1.x for BC.
+        - identifier: missingType.iterableValue
+        - identifier: missingType.parameter
+        - identifier: missingType.return
+        # Larastan only recognises the application's config/ directory; env() in a
+        # package config file is the Laravel convention (it is read at merge time).
+        -
+            identifier: larastan.noEnvCallsOutsideOfConfig
+            path: config/*

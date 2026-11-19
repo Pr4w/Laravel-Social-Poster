@@ -1,0 +1,27 @@
+{
+    "error": {
+        "code": 401,
+        "message": "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.",
+        "errors": [
+            {
+                "message": "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.",
+                "domain": "global",
+                "reason": "authError",
+                "location": "Authorization",
+                "locationType": "header"
+            }
+        ],
+        "status": "UNAUTHENTICATED",
+        "details": [
+            {
+                "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                "reason": "ACCESS_TOKEN_EXPIRED",
+                "domain": "googleapis.com",
+                "metadata": {
+                    "service": "youtube.googleapis.com",
+                    "method": "youtube.api.v3.V3DataVideoService.Insert"
+                }
+            }
+        ]
+    }
+}

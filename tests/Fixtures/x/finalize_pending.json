@@ -1,0 +1,12 @@
+{
+  "data": {
+    "id": "1880028106020515842",
+    "media_key": "7_1880028106020515842",
+    "size": 10,
+    "expires_after_secs": 86400,
+    "processing_info": {
+      "state": "pending",
+      "check_after_secs": 1
+    }
+  }
+}

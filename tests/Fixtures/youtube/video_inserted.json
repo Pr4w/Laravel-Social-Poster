@@ -1,0 +1,26 @@
+{
+    "kind": "youtube#video",
+    "etag": "Hf4dN1_Ji4ebnUzvlFKbzjr-1MQ",
+    "id": "dQw4w9WgXcQ",
+    "snippet": {
+        "publishedAt": "2026-11-18T12:00:04Z",
+        "channelId": "UCuAXFkgsw1L7xaCfnd5JJOw",
+        "title": "My video",
+        "description": "A description",
+        "thumbnails": {
+            "default": {"url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/default.jpg", "width": 120, "height": 90}
+        },
+        "channelTitle": "Test channel",
+        "categoryId": "22",
+        "liveBroadcastContent": "none",
+        "localized": {"title": "My video", "description": "A description"}
+    },
+    "status": {
+        "uploadStatus": "uploaded",
+        "privacyStatus": "public",
+        "license": "youtube",
+        "embeddable": true,
+        "publicStatsViewable": true,
+        "selfDeclaredMadeForKids": false
+    }
+}

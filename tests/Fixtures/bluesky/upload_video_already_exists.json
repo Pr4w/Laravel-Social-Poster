@@ -1,0 +1,15 @@
+{
+    "error": "already_exists",
+    "message": "Video already processed",
+    "did": "did:plc:4vx5zk2wrb7qmaz3rdc6yjfo",
+    "jobId": "N3d1PKq9xgdCSGuTNOSpw",
+    "state": "JOB_STATE_COMPLETED",
+    "blob": {
+        "$type": "blob",
+        "ref": {
+            "$link": "bafkreihbvqytxxcvwqr7gjqcrg2yqpqqzmrdqjvhbjkqkdxyb5g4vtrjau"
+        },
+        "mimeType": "video/mp4",
+        "size": 5242880
+    }
+}

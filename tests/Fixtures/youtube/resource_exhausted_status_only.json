@@ -1,0 +1,18 @@
+{
+    "error": {
+        "code": 429,
+        "message": "Quota exceeded for quota metric 'Queries' and limit 'Queries per minute' of service 'youtube.googleapis.com'.",
+        "status": "RESOURCE_EXHAUSTED",
+        "details": [
+            {
+                "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                "reason": "RATE_LIMIT_EXCEEDED",
+                "domain": "googleapis.com",
+                "metadata": {
+                    "service": "youtube.googleapis.com",
+                    "quota_metric": "youtube.googleapis.com/default"
+                }
+            }
+        ]
+    }
+}

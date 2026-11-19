@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "The request cannot be completed because you have exceeded your rate limit.",
+        "errors": [
+            {
+                "message": "The request cannot be completed because you have exceeded your rate limit.",
+                "domain": "usageLimits",
+                "reason": "rateLimitExceeded"
+            }
+        ]
+    }
+}

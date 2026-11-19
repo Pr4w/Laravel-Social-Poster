@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The video filename specified in the Slug header is invalid.",
+        "errors": [
+            {
+                "message": "The video filename specified in the Slug header is invalid.",
+                "domain": "youtube.video",
+                "reason": "invalidFilename"
+            }
+        ]
+    }
+}

@@ -1,0 +1,5 @@
+{
+  "status": 400,
+  "code": "VERSION_MISSING",
+  "message": "A version must be present. Please specify a version by adding the LinkedIn-Version header."
+}

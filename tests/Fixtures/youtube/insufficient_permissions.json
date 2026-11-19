@@ -1,0 +1,25 @@
+{
+    "error": {
+        "code": 403,
+        "message": "Request had insufficient authentication scopes.",
+        "errors": [
+            {
+                "message": "Request had insufficient authentication scopes.",
+                "domain": "global",
+                "reason": "insufficientPermissions"
+            }
+        ],
+        "status": "PERMISSION_DENIED",
+        "details": [
+            {
+                "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                "reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+                "domain": "googleapis.com",
+                "metadata": {
+                    "service": "youtube.googleapis.com",
+                    "method": "youtube.api.v3.V3DataVideoService.Insert"
+                }
+            }
+        ]
+    }
+}

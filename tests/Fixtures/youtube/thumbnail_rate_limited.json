@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 429,
+        "message": "The channel has uploaded too many thumbnails recently. Please try the request again later.",
+        "errors": [
+            {
+                "message": "The channel has uploaded too many thumbnails recently. Please try the request again later.",
+                "domain": "youtube.thumbnail",
+                "reason": "uploadRateLimitExceeded"
+            }
+        ]
+    }
+}

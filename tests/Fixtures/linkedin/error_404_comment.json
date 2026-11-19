@@ -1,0 +1,6 @@
+{
+  "status": 404,
+  "serviceErrorCode": 100,
+  "code": "NOT_FOUND",
+  "message": "Unable to obtain activity for urn: urn:li:share:7012345678901234567"
+}

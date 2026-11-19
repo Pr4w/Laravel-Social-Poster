@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 400,
+        "message": "The snippet.categoryId property specifies an invalid category ID.",
+        "errors": [
+            {
+                "message": "The snippet.categoryId property specifies an invalid category ID.",
+                "domain": "youtube.video",
+                "reason": "invalidCategoryId"
+            }
+        ]
+    }
+}

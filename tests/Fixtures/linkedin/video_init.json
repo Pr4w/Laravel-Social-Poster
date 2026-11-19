@@ -1,0 +1,25 @@
+{
+  "value": {
+    "uploadUrlsExpireAt": 4102444800000,
+    "video": "urn:li:video:C5505AQH-oV1qvnFtKA",
+    "uploadInstructions": [
+      {
+        "uploadUrl": "https://www.linkedin.com/dms-uploads/sp/C5505AQH/uploadedVideo?sau=aHR0cHM6Ly93d3cubGlua2VkaW4uY29tL2FtYnJ5L3BhcnQx&part=0",
+        "lastByte": 79999,
+        "firstByte": 0
+      },
+      {
+        "uploadUrl": "https://www.linkedin.com/dms-uploads/sp/C5505AQH/uploadedVideo?sau=aHR0cHM6Ly93d3cubGlua2VkaW4uY29tL2FtYnJ5L3BhcnQy&part=1",
+        "lastByte": 159999,
+        "firstByte": 80000
+      },
+      {
+        "uploadUrl": "https://www.linkedin.com/dms-uploads/sp/C5505AQH/uploadedVideo?sau=aHR0cHM6Ly93d3cubGlua2VkaW4uY29tL2FtYnJ5L3BhcnQz&part=2",
+        "lastByte": 199999,
+        "firstByte": 160000
+      }
+    ],
+    "uploadToken": "upload-token-abc",
+    "thumbnailUploadUrl": "https://www.linkedin.com/dms-uploads/sp/C5505AQH/uploadedThumbnail?sau=dGh1bWI"
+  }
+}

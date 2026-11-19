@@ -1,0 +1,6 @@
+{
+  "title": "Forbidden",
+  "detail": "You have been blocked from viewing this user's posts at the request of the user.",
+  "type": "about:blank",
+  "status": 403
+}

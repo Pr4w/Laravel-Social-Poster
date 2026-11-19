@@ -1,0 +1,15 @@
+{
+  "errors": [
+    {
+      "parameters": {
+        "media.media_ids": [
+          "1880028106020515841"
+        ]
+      },
+      "message": "Your media IDs are invalid."
+    }
+  ],
+  "title": "Invalid Request",
+  "detail": "One or more parameters to your request was invalid.",
+  "type": "https://api.twitter.com/2/problems/invalid-request"
+}

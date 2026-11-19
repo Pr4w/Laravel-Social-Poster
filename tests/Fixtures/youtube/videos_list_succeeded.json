@@ -1,0 +1,23 @@
+{
+    "kind": "youtube#videoListResponse",
+    "etag": "q8TnxwXKoGvBsuKoMXSWTGKkYWo",
+    "items": [
+        {
+            "kind": "youtube#video",
+            "etag": "Hf4dN1_Ji4ebnUzvlFKbzjr-1MQ",
+            "id": "dQw4w9WgXcQ",
+            "status": {
+                "uploadStatus": "processed",
+                "privacyStatus": "public",
+                "license": "youtube",
+                "embeddable": true,
+                "publicStatsViewable": true,
+                "madeForKids": false
+            },
+            "processingDetails": {
+                "processingStatus": "succeeded"
+            }
+        }
+    ],
+    "pageInfo": {"totalResults": 1, "resultsPerPage": 1}
+}

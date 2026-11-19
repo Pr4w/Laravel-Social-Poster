@@ -1,0 +1,18 @@
+{
+  "errorDetailType": "com.linkedin.common.error.BadRequest",
+  "message": "Multiple errors occurred during the input validation. Please see errorDetails for more information.",
+  "errorDetails": {
+    "inputErrors": [
+      {
+        "description": "Invalid URN: urn:li:image:missing",
+        "input": {
+          "inputPath": {
+            "fieldPath": "/content/media/id"
+          }
+        },
+        "code": "INVALID_URN_ID"
+      }
+    ]
+  },
+  "status": 422
+}

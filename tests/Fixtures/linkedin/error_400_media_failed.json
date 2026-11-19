@@ -1,0 +1,5 @@
+{
+  "status": 400,
+  "code": "MEDIA_ASSET_PROCESSING_FAILED",
+  "message": "Media asset processing failed"
+}

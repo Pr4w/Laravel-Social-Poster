@@ -1,0 +1,6 @@
+{
+  "title": "Forbidden",
+  "detail": "The video duration is longer than allowed for this account.",
+  "type": "about:blank",
+  "status": 403
+}

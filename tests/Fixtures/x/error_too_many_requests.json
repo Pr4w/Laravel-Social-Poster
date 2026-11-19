@@ -1,0 +1,6 @@
+{
+  "title": "Too Many Requests",
+  "detail": "Too Many Requests",
+  "type": "about:blank",
+  "status": 429
+}

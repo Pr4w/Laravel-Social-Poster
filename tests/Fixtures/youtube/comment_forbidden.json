@@ -1,0 +1,13 @@
+{
+    "error": {
+        "code": 403,
+        "message": "The comment thread could not be created due to insufficient permissions. The request might not be properly authorized.",
+        "errors": [
+            {
+                "message": "The comment thread could not be created due to insufficient permissions. The request might not be properly authorized.",
+                "domain": "youtube.commentThread",
+                "reason": "forbidden"
+            }
+        ]
+    }
+}
