@@ -717,7 +717,9 @@ it('still loads a v1.0 subclass that overrides directPostInfo(), and honours the
     $autoload = $vendor.'/autoload.php';
 
     // In its own process: an incompatible override is a fatal error at load time.
-    $process = new Process([PHP_BINARY, '-r', 'require $argv[1]; require $argv[2]; echo "loaded";', $autoload, $fixture]);
+    // Diagnostics go to stderr, so a vendor deprecation notice (lowest dependencies on a newer PHP)
+    // cannot pollute stdout; a fatal error still stops the script before "loaded".
+    $process = new Process([PHP_BINARY, '-d', 'display_errors=stderr', '-r', 'require $argv[1]; require $argv[2]; echo "loaded";', $autoload, $fixture]);
     $process->run();
 
     expect(trim($process->getOutput()))->toBe('loaded', $process->getErrorOutput().$process->getOutput());

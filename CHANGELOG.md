@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.2] - 2026-11-19
+
+### Removed
+
+- Laravel 11 support. `composer.json` now requires `laravel/framework` ^12|^13 (and
+  `orchestra/testbench` ^10|^11 for development), and CI no longer runs Laravel 11. PHP 8.2 stays the
+  minimum (8.3 for Laravel 13). Laravel 11 apps keep resolving to 1.1.0.
+
 ## [1.1.0] - 2026-11-19
 
 ### Added
@@ -338,5 +346,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.2]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.0...v1.1.2
 [1.1.0]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pr4w/Laravel-Social-Poster/releases/tag/v1.0.0

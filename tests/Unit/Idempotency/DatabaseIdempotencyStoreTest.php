@@ -242,10 +242,6 @@ it('works on databases without insert-or-ignore, such as SQL Server', function (
         }
     };
 
-    if (method_exists($grammar, 'setConnection')) {
-        $grammar->setConnection($connection); // Laravel 11
-    }
-
     $connection->setQueryGrammar($grammar);
     $store = new DatabaseIdempotencyStore;
 

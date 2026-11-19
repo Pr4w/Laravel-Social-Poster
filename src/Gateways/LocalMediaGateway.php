@@ -310,7 +310,7 @@ class LocalMediaGateway implements MediaGateway
      * A local path for media on a filesystem disk: the file itself on a local
      * disk, else a temp copy streamed from the disk (no public URL needed, so
      * private buckets work). The path is normalised first and may not climb
-     * out of the disk root: on Laravel 11 and 12 FilesystemAdapter::path()
+     * out of the disk root: on Laravel 12 FilesystemAdapter::path()
      * does not normalise "../" itself.
      */
     protected function pathFromDisk(Media $media): string

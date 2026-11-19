@@ -977,7 +977,7 @@ class PostBuilder
      *
      * A job that dispatches after commit, inside an open transaction, on a
      * framework that cannot release its unique lock when the transaction rolls
-     * back (Laravel 11, early 12): lock, announce and push all wait for the
+     * back (Laravel 12 releases without rollback callbacks): lock, announce and push all wait for the
      * commit, so a rollback (a deadlock retry, an app error) leaves neither a
      * held lock that would deduplicate the retry into nothing nor a PostQueued
      * for a post that was never queued. The result then counts it as queued.
@@ -1030,8 +1030,8 @@ class PostBuilder
 
     /**
      * Whether a rolled-back transaction releases the unique lock of a job
-     * queued after commit: Laravel 12.x since rollback callbacks exist, and
-     * 13. Laravel 11 has no rollback hook, so the lock stays for uniqueFor.
+     * queued after commit: Laravel 13, and 12.x since rollback callbacks exist.
+     * Earlier 12.x releases have no rollback hook, so the lock stays for uniqueFor.
      */
     protected function rollbackReleasesUniqueLocks(object $transactions): bool
     {

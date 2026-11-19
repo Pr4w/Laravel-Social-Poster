@@ -747,7 +747,7 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments, Suppo
         $timeout = $this->uploadTimeout();
 
         try {
-            // Concurrency is passed positionally: Laravel 11's pool() has no such parameter.
+            // Concurrency is passed positionally: early Laravel 12 releases' pool() has no such parameter.
             $connectTimeout = (int) $this->apiConfig('connect_timeout', 10);
             $responses = Http::pool(function (Pool $pool) use ($batch, $chunks, $token, $timeout, $connectTimeout) {
                 foreach ($batch as $index => $instruction) {

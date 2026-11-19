@@ -1,5 +1,11 @@
 # Upgrade guide
 
+## From 1.1.0 to 1.1.2
+
+Laravel 11 is no longer supported: the package now requires `laravel/framework` ^12|^13. Upgrade the
+app to Laravel 12 or 13 first, then run `composer update pr4w/laravel-social-poster`. Nothing else
+changes; a Laravel 11 app keeps resolving to 1.1.0, which stays fully usable.
+
 ## From 1.0 to 1.1
 
 1.1 keeps the 1.0 builder, events, value objects and driver contract. Code that publishes through

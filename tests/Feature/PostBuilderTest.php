@@ -229,7 +229,7 @@ class MetadataResolver implements CredentialsResolver
     }
 }
 
-/** A builder on a framework whose transactions cannot release a lock on rollback (Laravel 11). */
+/** A builder on a framework whose transactions cannot release a lock on rollback (early Laravel 12). */
 class NoRollbackHookBuilder extends PostBuilder
 {
     protected function rollbackReleasesUniqueLocks(object $transactions): bool

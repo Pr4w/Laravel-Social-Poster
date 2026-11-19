@@ -58,7 +58,7 @@ reference when a guide and the code disagree.
 
 ## Requirements
 
-- PHP 8.2 or later, Laravel 11, 12 or 13.
+- PHP 8.2 or later (8.3 or later for Laravel 13), Laravel 12 or 13. Laravel 11 apps can stay on 1.1.0.
 - PHP extensions: `fileinfo`, `json`, `mbstring`, `openssl` (required); `intl` (accurate grapheme
   counting for Bluesky and Threads), `dom` (Bluesky link cards), `gd` or `imagick` (image
   conversion and link-card thumbnails) are suggested.
@@ -95,7 +95,7 @@ php artisan vendor:publish --tag=social-poster-migrations
 php artisan migrate
 ```
 
-**Scheduled commands.** Add them to your scheduler (`routes/console.php` on Laravel 11+):
+**Scheduled commands.** Add them to your scheduler (`routes/console.php`):
 
 ```php
 use Illuminate\Support\Facades\Schedule;
@@ -216,7 +216,7 @@ SocialPoster::on('instagram', 'linkedin', 'x')
   `postNow()` returns a failed `PostResult` for it.
 - **`afterCommit(bool = true)`**: dispatch only after the surrounding database transaction commits,
   so a rolled-back record never gets a post. The default is `social.after_commit` (`true`). On
-  Laravel 11 and early 12 (no rollback callbacks), `post()` inside an open transaction takes the unique
+  Laravel 12 releases without rollback callbacks, `post()` inside an open transaction takes the unique
   lock, fires `PostQueued` and pushes only when the transaction commits: `QueuedPost` then reports the
   platform as queued, and a duplicate found at commit is reported only through `PostDeduplicated`.
 - **`notAfter(DateTimeInterface|int|null)`**: a post that has not been created by then fails with

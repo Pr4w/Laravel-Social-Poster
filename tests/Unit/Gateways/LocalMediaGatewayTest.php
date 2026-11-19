@@ -389,7 +389,7 @@ it('reads disk media from the disk: the file itself on a local disk, a streamed 
     expect(is_file($copy))->toBeFalse();
 });
 
-/** A local disk whose path() does not normalise "../", as on Laravel 11 and 12. */
+/** A local disk whose path() does not normalise "../", as on Laravel 12. */
 function spLegacyLocalDisk(string $name, string $root): void
 {
     $adapter = new LocalFilesystemAdapter($root);

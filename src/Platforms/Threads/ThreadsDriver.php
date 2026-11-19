@@ -540,7 +540,7 @@ class ThreadsDriver extends AbstractPlatform implements SupportsFirstComment
 
         $concurrency = max(1, min(count($paramsList), (int) $this->apiConfig('pool_concurrency', 10)));
 
-        // Concurrency is passed positionally: Laravel 11 has no such parameter and ignores it.
+        // Concurrency is passed positionally: early Laravel 12 releases have no such parameter and ignore it.
         $responses = Http::pool(function (Pool $pool) use ($post, $paramsList, $url) {
             foreach ($paramsList as $index => $params) {
                 $this->pooledRequest($pool->as((string) $index), $post)->post($url, $this->withTokenField($post, $params));

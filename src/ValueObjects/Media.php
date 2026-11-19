@@ -76,7 +76,7 @@ final class Media
      * from the disk and can mint a temporary URL instead of relying on it.
      * The disk and path are kept in $meta under the reserved "_disk" keys.
      * The path is normalised ("a/./b/../c" → "a/c"), and one that climbs out
-     * of the disk root ("../") is refused: on Laravel 11 and 12 a local disk's
+     * of the disk root ("../") is refused: on Laravel 12 a local disk's
      * path() does not normalise it, so it would name a file outside the disk.
      *
      * @param  array<string, mixed>  $meta
