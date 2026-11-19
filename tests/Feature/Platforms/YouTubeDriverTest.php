@@ -8,6 +8,7 @@ use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Psr7\Response as PsrResponse;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -29,6 +30,7 @@ use SocialPoster\Platforms\YouTube\YouTubeDriver;
 use SocialPoster\Platforms\YouTube\YouTubeOptions;
 use SocialPoster\Platforms\YouTube\YouTubePrivacy;
 use SocialPoster\SocialManager;
+use SocialPoster\Support\PublicUrl;
 use SocialPoster\ValueObjects\Credentials;
 use SocialPoster\ValueObjects\Media;
 use SocialPoster\ValueObjects\Pending;
@@ -1230,6 +1232,73 @@ it('reads a remote video with Range requests, never sending the YouTube token to
         ->and($puts[1]->body())->toBe(substr($content, YouTubeTestKit::CHUNK, YouTubeTestKit::CHUNK))
         ->and($puts[2]->body())->toBe(substr($content, 2 * YouTubeTestKit::CHUNK))
         ->and(glob(YouTubeTestKit::$dir.'/sp_*'))->toBe([]);
+});
+
+it('probes ranges on the pinned cURL handler, never as a stream (Guzzle 8 refuses the pin there)', function () {
+    config(['social.media.block_private_networks' => true]);
+    PublicUrl::resolveUsing(fn () => ['93.184.216.34']);
+    $captured = [];
+
+    Http::fake(function (Request $request, array $options) use (&$captured) {
+        $captured = $options;
+
+        return Http::response('A', 206, ['Content-Range' => 'bytes 0-0/1000', 'ETag' => '"v1"']);
+    });
+
+    try {
+        $probe = (fn (string $url) => $this->probeRange($url))->call(YouTubeTestKit::driver(), YouTubeTestKit::SOURCE);
+    } finally {
+        PublicUrl::resolveUsing(null);
+    }
+
+    expect($probe)->toBe(['size' => 1000, 'etag' => '"v1"'])
+        ->and($captured)->not->toHaveKey('stream')
+        ->and($captured['curl'][CURLOPT_RESOLVE])->toContain('cdn.example.com:443:93.184.216.34')
+        ->and($captured['on_headers'])->toBeCallable()
+        ->and($captured['progress'])->toBeCallable();
+});
+
+it('gives up on the range probe without reading the video when the host does not answer with a small 206', function (Closure $abort) {
+    Http::fake(function (Request $request, array $options) use ($abort) {
+        // What cURL does with the callbacks: the exception aborts the transfer.
+        $abort($options);
+
+        return Http::response(str_repeat('V', 1000), 200);
+    });
+
+    $probe = (fn (string $url) => $this->probeRange($url))->call(YouTubeTestKit::driver(), YouTubeTestKit::SOURCE);
+
+    expect($probe)->toBeNull();
+})->with([
+    'the host ignores Range (200)' => [fn (array $options) => $options['on_headers'](new PsrResponse(200, ['Content-Length' => '5242880']))],
+    'a 206 announcing a large body' => [fn (array $options) => $options['on_headers'](new PsrResponse(206, ['Content-Length' => '5242880']))],
+    'a 206 that keeps sending' => [fn (array $options) => $options['progress'](0, 70000, 0, 0)],
+]);
+
+it('lets the range probe callbacks through a small 206 and a redirect', function () {
+    $captured = [];
+
+    Http::fake(function (Request $request, array $options) use (&$captured) {
+        $captured = $options;
+
+        return Http::response('A', 206, ['Content-Range' => 'bytes 0-0/1000']);
+    });
+
+    (fn (string $url) => $this->probeRange($url))->call(YouTubeTestKit::driver(), YouTubeTestKit::SOURCE);
+
+    $captured['on_headers'](new PsrResponse(206, ['Content-Length' => '1']));
+    $captured['on_headers'](new PsrResponse(302, ['Location' => 'https://cdn2.example.com/v.mp4']));
+    $captured['progress'](1, 1, 0, 0);
+
+    expect(true)->toBeTrue();
+});
+
+it('still reports a connection failure of the range probe', function () {
+    Http::fake(fn () => Http::failedConnection('cURL error 7: Failed to connect'));
+
+    $e = YouTubeTestKit::catch(fn () => (fn (string $url) => $this->probeRange($url))->call(YouTubeTestKit::driver(), YouTubeTestKit::SOURCE));
+
+    expect($e)->toBeInstanceOf(ConnectionException::class);
 });
 
 it('fails when the remote video changes during the upload', function (Closure $server, string $why) {

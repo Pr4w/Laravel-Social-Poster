@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.6] - 2026-11-19
+
+### Fixed
+
+- YouTube, remote videos: the Range probe that measures the source (`YouTubeDriver::probeRange()`)
+  no longer uses Guzzle's `stream` option. With private networks blocked (the production default),
+  the request also carries the cURL address pin, and Guzzle 8's stream handler refuses that pin
+  (`InvalidArgumentException`), so every remote YouTube upload failed before it started. Guzzle 7
+  silently dropped the pin instead, which left that one request without the DNS-rebinding
+  protection. The probe now runs on the cURL handler and aborts the transfer itself when the host
+  does not answer with a small 206 (another 2xx, a large announced body, or more than 64 KiB
+  received), so a host that ignores `Range` still never sends the whole video.
+
 ## [1.1.5] - 2026-11-19
 
 ### Changed
@@ -384,6 +397,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.6]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.2...v1.1.3

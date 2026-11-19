@@ -10,7 +10,9 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\MessageBag;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
+use RuntimeException;
 use SocialPoster\Capabilities\Capabilities;
 use SocialPoster\Capabilities\CaptionRules;
 use SocialPoster\Capabilities\CommentRules;
@@ -176,6 +178,9 @@ class YouTubeDriver extends AbstractPlatform implements SupportsFirstComment
 
     /** A source answering these mid-upload stopped accepting the URL (a signed URL expired). */
     protected const SOURCE_EXPIRED_STATUSES = [401, 403, 410];
+
+    /** The most the range probe reads before giving up on the host (it asks for 1 byte). */
+    protected const PROBE_MAX_BYTES = 65536;
 
     /** Copies of the source kept between upload runs (social-poster:prune-temp removes stale ones). */
     protected const STAGED_COPY_PATTERN = '/^sp_youtube_[0-9a-f]{16}(\.[a-z0-9]+)?$/';
@@ -929,36 +934,64 @@ class YouTubeDriver extends AbstractPlatform implements SupportsFirstComment
     /**
      * GET bytes 0-0: a 206 with 'Content-Range: bytes 0-0/N' gives the size
      * and proves the host serves ranges. Null otherwise (the caller falls back
-     * to the gateway download). The body is streamed and closed unread.
+     * to the gateway download).
+     *
+     * Never 'stream': Guzzle hands streamed requests to its StreamHandler,
+     * which drops the cURL address pin of sourceRequest() (Guzzle 7) or
+     * refuses it with an InvalidArgumentException (Guzzle 8). A host that
+     * ignores the Range header would then send the whole video into memory,
+     * so the transfer is aborted instead: at the headers for any other 2xx or
+     * an announced body over PROBE_MAX_BYTES, and while receiving past it.
      *
      * @return array{size: int, etag: ?string}|null
      */
     protected function probeRange(string $url): ?array
     {
-        $response = $this->sourceRequest($url)
-            ->withOptions(['stream' => true])
-            ->withHeaders(['Range' => 'bytes=0-0'])
-            ->get($url);
+        $aborted = false;
+        $max = static::PROBE_MAX_BYTES;
 
         try {
-            if ($response->status() !== 206) {
+            $response = $this->sourceRequest($url)
+                ->withOptions([
+                    'on_headers' => static function (ResponseInterface $response) use (&$aborted, $max): void {
+                        $status = $response->getStatusCode();
+                        $length = $response->getHeaderLine('Content-Length');
+
+                        if (($status >= 200 && $status < 300 && $status !== 206) || (ctype_digit($length) && (int) $length > $max)) {
+                            $aborted = true;
+
+                            throw new RuntimeException('The video host did not answer the range probe with a small 206.');
+                        }
+                    },
+                    'progress' => static function ($total, $downloaded) use (&$aborted, $max): void {
+                        if ((int) $downloaded > $max) {
+                            $aborted = true;
+
+                            throw new RuntimeException("The range probe received more than {$max} bytes.");
+                        }
+                    },
+                ])
+                ->withHeaders(['Range' => 'bytes=0-0'])
+                ->get($url);
+        } catch (Throwable $e) {
+            if ($aborted) {
                 return null;
             }
 
-            $range = $this->parseContentRange((string) $response->header('Content-Range'));
-
-            if ($range === null || $range['total'] === null || $range['total'] <= 0) {
-                return null;
-            }
-
-            return ['size' => $range['total'], 'etag' => $this->etagOf($response)];
-        } finally {
-            try {
-                $response->toPsrResponse()->getBody()->close();
-            } catch (Throwable) {
-                // nothing to release
-            }
+            throw $e;
         }
+
+        if ($response->status() !== 206) {
+            return null;
+        }
+
+        $range = $this->parseContentRange((string) $response->header('Content-Range'));
+
+        if ($range === null || $range['total'] === null || $range['total'] <= 0) {
+            return null;
+        }
+
+        return ['size' => $range['total'], 'etag' => $this->etagOf($response)];
     }
 
     /**
