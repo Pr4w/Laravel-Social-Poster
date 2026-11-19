@@ -14,6 +14,7 @@ use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Promise\Create;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\Request;
+use Illuminate\Queue\TimeoutExceededException;
 use Illuminate\Queue\WorkerOptions;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,7 @@ use SocialPoster\Events\PostFailed;
 use SocialPoster\Events\PostPublished;
 use SocialPoster\Jobs\AddFirstCommentJob;
 use SocialPoster\Jobs\PublishToConnectionJob;
+use SocialPoster\SocialManager;
 use SocialPoster\ValueObjects\Credentials;
 use SocialPoster\ValueObjects\Media;
 use SocialPoster\ValueObjects\PostResult;
@@ -394,6 +396,94 @@ it('finishes an upload spread over several job runs from the copy publish() kept
         array_map('unlink', glob($dir.'/*') ?: []);
         @rmdir($dir);
     }
+});
+
+// --- A run the queue killed ------------------------------------------------------------------
+
+/** @return array<string, mixed> */
+function ytUploadState(): array
+{
+    return [
+        'stage' => 'upload', 'session' => YT_SESSION, 'size' => 4096, 'mime' => 'video/mp4',
+        'offset' => 0, 'range_reads' => false, 'restarts' => 0, 'stalls' => 0,
+        'requested_privacy' => 'public', 'upload_started_at' => time(), 'deadline' => time() + 3600,
+    ];
+}
+
+it('runs an upload run the queue killed again, which finds the video its last chunk created', function () {
+    $log = ytEvents();
+
+    Http::fake(function (Request $request) {
+        if ($request->method() === 'POST' && str_contains($request->url(), '/upload/youtube/v3/videos')) {
+            return Http::response('', 200, ['Location' => YT_SESSION]);
+        }
+
+        if ($request->method() === 'PUT' && $request->header('Content-Range')[0] === 'bytes */4096') {
+            // The killed run's last chunk arrived: the session replays the video.
+            return Http::response(ytFixture('video_inserted.json'), 201);
+        }
+
+        throw new RuntimeException("Unexpected request: {$request->method()} {$request->url()}");
+    });
+
+    dispatch(ytJob(null, false));
+    $first = json_decode((string) DB::table('jobs')->value('payload'), true);
+
+    // publish() opens the session and queues the first upload run.
+    ytWork(1);
+    $upload = DB::table('jobs')->first();
+
+    expect($first['failOnTimeout'])->toBeTrue()
+        ->and(json_decode((string) $upload->payload, true)['failOnTimeout'])->toBeFalse();
+
+    // That run is killed while it sends the last chunk: the worker had taken
+    // it once, and the queue hands it out again once retry_after passed.
+    DB::table('jobs')->where('id', $upload->id)->update(['attempts' => 1]);
+    ytWork();
+
+    $published = ytOf($log, PostPublished::class);
+
+    expect(ytOf($log, PostFailed::class))->toBe([])
+        ->and($published)->toHaveCount(1)
+        ->and($published[0]->result->platformPostId)->toBe(YT_VIDEO)
+        ->and(ytSent('upload_id=', 'PUT'))->toHaveCount(1)
+        ->and(ytStatusOf(YT_KEY))->toBe(AtomicIdempotencyStore::STATUS_PUBLISHED);
+});
+
+it('reports an upload run the queue gave up on after kills as possibly published, and keeps the key', function () {
+    $log = ytEvents();
+
+    $job = ytJob(ytUploadState(), false);
+    $job->failOnTimeout = false;
+    $job->failed(new TimeoutExceededException('PublishToConnectionJob has timed out.'));
+
+    $failed = ytOf($log, PostFailed::class);
+
+    expect($failed)->toHaveCount(1)
+        ->and($failed[0]->exception->reason)->toBe(FailureReason::OutcomeUnknown)
+        ->and($failed[0]->possiblyPublished)->toBeTrue()
+        ->and($failed[0]->exception->getMessage())->toContain('may have sent its last part')
+        ->and(ytStatusOf(YT_KEY))->toBe(AtomicIdempotencyStore::STATUS_FAILED);
+});
+
+it('still reports a killed upload run queued before runs were retried as a plain timeout', function () {
+    $log = ytEvents();
+
+    ytJob(ytUploadState(), false)->failed(new TimeoutExceededException('PublishToConnectionJob has timed out.'));
+
+    $failed = ytOf($log, PostFailed::class);
+
+    expect($failed)->toHaveCount(1)
+        ->and($failed[0]->exception->reason)->toBe(FailureReason::Timeout)
+        ->and($failed[0]->possiblyPublished)->toBeFalse();
+});
+
+it('queues only the upload stage to run again after a kill', function () {
+    $driver = app(SocialManager::class)->driver('youtube');
+
+    expect($driver->retriesKilledRun(ytUploadState()))->toBeTrue()
+        ->and($driver->retriesKilledRun(ytFinalizeState()))->toBeFalse()
+        ->and($driver->retriesKilledRun([]))->toBeFalse();
 });
 
 // --- First comment recovery ------------------------------------------------------------------

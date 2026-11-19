@@ -590,7 +590,8 @@ comment text under another post does not count), payload `recovered = true`. Not
 is posted. The replies cannot be read: a temporary error is retried; a refusal (no
 `threads_read_replies`, a rejected token) fails as `PermanentException(OutcomeUnknown)` with
 `possibly_published = true`, `recovering = true` and `lookup_reason`, so the reply is never posted
-twice.
+twice. When the credentials list their `scopes` without `threads_read_replies`, the same failure comes
+without the request (and without its error log line), with `lookup_skipped = true`.
 
 A reply request that never left the client is retried directly. A reply `threads_publish` answered
 2xx without an id fails as `PermanentException(OutcomeUnknown)` with `possibly_published = true` and

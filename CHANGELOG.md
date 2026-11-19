@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.3] - 2026-11-19
+
+### Changed
+
+- YouTube: an upload run killed by the job timeout runs again after the queue's `retry_after`
+  instead of failing as a plain `Timeout`. The run asks the upload session first, so a video whose
+  last chunk arrived is published once. If the queue gives up on it, it is reported as
+  `OutcomeUnknown` with `possiblyPublished = true`, and the idempotency key is kept. Drivers opt in
+  with `AbstractPlatform::retriesKilledRun()`.
+- LinkedIn and Threads: a first-comment recovery skips the comment read, with no request and no
+  error log line, when the credentials list their `scopes` and none of them can read comments
+  (`threads_read_replies`; `r_organization_social_feed` / `r_organization_social`,
+  `r_member_social_feed` / `r_member_social`). The outcome stays `OutcomeUnknown`, with
+  `lookup_skipped = true` and `missing_scopes`.
+
 ## [1.1.2] - 2026-11-19
 
 ### Removed
@@ -346,6 +361,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.3]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.0...v1.1.2
 [1.1.0]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Pr4w/Laravel-Social-Poster/releases/tag/v1.0.0

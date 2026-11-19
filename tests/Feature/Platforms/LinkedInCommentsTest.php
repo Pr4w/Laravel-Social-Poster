@@ -258,6 +258,47 @@ it('never comments in a recovery it cannot check', function (string $fixture, in
     'server error' => ['error_500', 500, TemporaryException::class, FailureReason::ServerError],
 ]);
 
+it('skips the recovery read, with no request, when the listed scopes cannot read comments', function (string $author, string $scopes, array $missing) {
+    Http::fake();
+
+    $post = Kit::post(credentials: Kit::credentials(['author' => $author, 'scopes' => $scopes]));
+    $e = Kit::catch(fn () => Kit::driver()->addFirstComment($post, liRecovering(), 'Hi'));
+
+    expect($e)->toBeInstanceOf(PermanentException::class)
+        ->and($e->reason)->toBe(FailureReason::OutcomeUnknown)
+        ->and($e->possiblyPublished())->toBeTrue()
+        ->and($e->needsReconnect())->toBeFalse()
+        ->and($e->context)->toMatchArray([
+            'recovering' => true,
+            'operation' => 'comment',
+            'lookup_skipped' => true,
+            'lookup_reason' => FailureReason::InsufficientPermissions->value,
+            'missing_scopes' => $missing,
+        ]);
+
+    Http::assertNothingSent();
+})->with([
+    'member' => [Kit::PERSON, 'r_basicprofile w_member_social w_member_social_feed', [['r_member_social_feed', 'r_member_social']]],
+    'page' => [Kit::ORG, 'rw_organization_admin,w_organization_social,w_organization_social_feed', [['r_organization_social_feed', 'r_organization_social']]],
+]);
+
+it('reads the comments in a recovery when the listed scopes can, or are unknown', function (array $scopes) {
+    Http::fake(fn (Request $request) => $request->method() === 'GET' && $request->url() === LI_COMMENTS_URL
+        ? Http::response(['elements' => [liListedComment(Kit::ORG, 'Hi', '7012399999999999999')]], 200)
+        : Http::response(['message' => 'unexpected'], 500));
+
+    $post = Kit::post(credentials: Kit::credentials(['author' => Kit::ORG] + $scopes));
+    $result = Kit::driver()->addFirstComment($post, liRecovering(), 'Hi');
+
+    expect($result->payload['recovered'] ?? null)->toBeTrue();
+
+    Http::assertSentCount(1);
+})->with([
+    'r_organization_social_feed' => [['scopes' => 'w_organization_social_feed r_organization_social_feed']],
+    'r_organization_social' => [['scopes' => ['w_organization_social', 'r_organization_social']]],
+    'scopes not listed' => [[]],
+]);
+
 it('refuses to comment without a post urn', function () {
     Http::fake();
 

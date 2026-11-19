@@ -2294,12 +2294,32 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments, Suppo
      * comments needs r_organization_social_feed (pages) or the restricted
      * r_member_social_feed (members): without it, or on any other refusal,
      * this throws OutcomeUnknown with possibly_published = true, because
-     * posting again without having looked could comment twice. A temporary
-     * failure (or a connection error) propagates, so the job retries the
-     * recovery.
+     * posting again without having looked could comment twice. When the
+     * credentials list their scopes and none of them can read comments, no
+     * request is made (and nothing is logged): lookup_skipped = true. A
+     * temporary failure (or a connection error) propagates, so the job
+     * retries the recovery.
      */
     protected function findOwnComment(PreparedPost $context, string $urn, string $author, string $text): ?CommentResult
     {
+        $missing = $context->credentials->missingScopes($this->commentLookupScopes($context->credentials));
+
+        if ($missing !== null && $missing !== []) {
+            throw new PermanentException(
+                'An earlier attempt may already have posted this LinkedIn comment, and the token cannot read the post\'s comments to check (grant '.implode(' or ', $missing[0]).'). Check the post before commenting again.',
+                Platform::LinkedIn,
+                FailureReason::OutcomeUnknown,
+                [
+                    'possibly_published' => true,
+                    'recovering' => true,
+                    'operation' => 'comment',
+                    'lookup_reason' => FailureReason::InsufficientPermissions->value,
+                    'lookup_skipped' => true,
+                    'missing_scopes' => $missing,
+                ],
+            );
+        }
+
         $response = $this->rest($context)->get('socialActions/'.rawurlencode($urn).'/comments');
 
         if (! $this->ok($response)) {
@@ -2392,6 +2412,22 @@ class LinkedInDriver extends AbstractPlatform implements SupportsComments, Suppo
                 default => [['w_member_social_feed', 'w_member_social', 'w_organization_social_feed', 'w_organization_social']],
             },
             default => [],
+        };
+    }
+
+    /**
+     * The scopes findOwnComment() needs to read a post's comments, any one of
+     * them: r_organization_social_feed or r_organization_social for a page,
+     * the restricted r_member_social_feed or r_member_social for a member.
+     *
+     * @return list<list<string>>
+     */
+    protected function commentLookupScopes(Credentials $credentials): array
+    {
+        return match ($this->authorType($credentials->get('author'))) {
+            'organization' => [['r_organization_social_feed', 'r_organization_social']],
+            'person' => [['r_member_social_feed', 'r_member_social']],
+            default => [['r_organization_social_feed', 'r_organization_social', 'r_member_social_feed', 'r_member_social']],
         };
     }
 

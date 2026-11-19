@@ -96,6 +96,21 @@ abstract class AbstractPlatform implements SocialPlatform
         );
     }
 
+    /**
+     * Whether the queue should run a step with this state again when its
+     * worker is killed on timeout, instead of failing it. Only for a step
+     * whose repeated run (Pending::ATTEMPT above 1) first asks the platform
+     * what the killed run left behind, so running it again cannot create the
+     * post twice. Default false: a killed run fails, as possibly published in
+     * a commit phase.
+     *
+     * @param  array<string, mixed>  $state  The driver's state, without the job's reserved keys.
+     */
+    public function retriesKilledRun(array $state): bool
+    {
+        return false;
+    }
+
     protected function rulesFor(PreparedPost $post): Capabilities
     {
         return $this->capabilities();

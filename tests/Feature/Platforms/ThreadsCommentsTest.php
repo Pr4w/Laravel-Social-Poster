@@ -362,6 +362,36 @@ it('never replies in a recovery it cannot check', function (\Closure $read, stri
     'throttled' => [K::error('rate-limit-code-4', 400), TemporaryException::class, FailureReason::RateLimited],
 ]);
 
+it('skips the recovery read, with no request, when the listed scopes lack threads_read_replies', function () {
+    K::fake([]);
+
+    $credentials = ['account_id' => K::ACCOUNT, 'access_token' => K::TOKEN, 'scopes' => 'threads_basic,threads_content_publish,threads_manage_replies'];
+    $e = K::catch(fn () => K::driver()->addFirstComment(K::post(credentials: $credentials), recoveringParent(), 'Hi'));
+
+    expect($e)->toBeInstanceOf(PermanentException::class)
+        ->and($e->reason)->toBe(FailureReason::OutcomeUnknown)
+        ->and($e->possiblyPublished())->toBeTrue()
+        ->and($e->needsReconnect())->toBeFalse()
+        ->and($e->context)->toMatchArray([
+            'recovering' => true,
+            'operation' => 'comment',
+            'lookup_skipped' => true,
+            'lookup_reason' => FailureReason::InsufficientPermissions->value,
+            'missing_scopes' => [['threads_read_replies']],
+        ])
+        ->and(K::routes())->toBe([]);
+});
+
+it('reads the replies in a recovery when threads_read_replies is listed', function () {
+    K::fake(['GET 1784/replies' => [['data' => [['id' => 'R9', 'text' => 'Hi', 'replied_to' => ['id' => '17890001']]]]]]);
+
+    $credentials = ['account_id' => K::ACCOUNT, 'access_token' => K::TOKEN, 'scopes' => ['threads_basic', 'threads_manage_replies', 'threads_read_replies']];
+    $result = K::driver()->addFirstComment(K::post(credentials: $credentials), recoveringParent(), 'Hi');
+
+    expect($result->id)->toBe('R9')
+        ->and(K::routes())->toBe(['GET 1784/replies']);
+});
+
 it('points a refused reply at threads_manage_replies', function (string $route) {
     K::fake([
         'POST 1784/threads' => [$route === 'create' ? K::error('permission-code-10', 403) : K::json(['id' => 'R1'])],

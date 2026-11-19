@@ -1469,6 +1469,19 @@ it('encrypts the payload when the app has a key', function () {
     expect(eventsOf($events, PostPublished::class))->toHaveCount(1);
 });
 
+it('keeps failing a killed run of a step its driver cannot run again', function () {
+    useDriver();
+    useDatabaseQueue();
+    ScriptedDriver::$script = [PublishOutcome::pending(['phase' => 'await'], 30)];
+
+    push(publishJob());
+    work(1);
+
+    expect(queuedCommands())->toHaveCount(1)
+        ->and(queuedCommands()[0]->failOnTimeout)->toBeTrue()
+        ->and(json_decode((string) DB::table('jobs')->value('payload'), true)['failOnTimeout'])->toBeTrue();
+});
+
 it('derives the run timeout from the longest upload slice and single call', function () {
     expect(PublishToConnectionJob::configuredTimeout())->toBe(660)
         ->and(PublishToConnectionJob::configuredTimeout(Platform::Pinterest))->toBe(960)

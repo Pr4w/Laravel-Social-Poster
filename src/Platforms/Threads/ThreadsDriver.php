@@ -1274,10 +1274,30 @@ class ThreadsDriver extends AbstractPlatform implements SupportsFirstComment
      * job retries the recovery; a refusal (no threads_read_replies, a rejected
      * token) becomes OutcomeUnknown with possibly_published = true, because
      * publishing a new container without having looked could post the reply
-     * twice.
+     * twice. When the credentials list their scopes without
+     * threads_read_replies, no request is made (and nothing is logged):
+     * lookup_skipped = true.
      */
     protected function findOwnReply(PreparedPost $context, string $parentId, string $text): ?CommentResult
     {
+        $missing = $context->credentials->missingScopes([['threads_read_replies']]);
+
+        if ($missing !== null && $missing !== []) {
+            throw new PermanentException(
+                'An earlier attempt may already have posted this Threads reply, and the token cannot read the account\'s replies to check (grant threads_read_replies). Check the post before replying by hand.',
+                Platform::Threads,
+                FailureReason::OutcomeUnknown,
+                [
+                    'possibly_published' => true,
+                    'recovering' => true,
+                    'operation' => 'comment',
+                    'lookup_reason' => FailureReason::InsufficientPermissions->value,
+                    'lookup_skipped' => true,
+                    'missing_scopes' => $missing,
+                ],
+            );
+        }
+
         $response = $this->http($context)->get($this->edge($context, '/replies'), [
             'fields' => 'id,text,timestamp,permalink,replied_to,root_post',
             'limit' => 50,

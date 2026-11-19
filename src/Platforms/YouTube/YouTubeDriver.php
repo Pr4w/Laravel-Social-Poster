@@ -450,6 +450,18 @@ class YouTubeDriver extends AbstractPlatform implements SupportsFirstComment
     }
 
     /**
+     * An upload run the queue killed (it may have been sending the last
+     * chunk) runs again: a repeated run asks the session first, which returns
+     * the video if the last chunk arrived, or the offset to continue from.
+     *
+     * @param  array<string, mixed>  $state
+     */
+    public function retriesKilledRun(array $state): bool
+    {
+        return ($state['stage'] ?? $state['phase'] ?? null) === 'upload';
+    }
+
+    /**
      * One upload run, and the end of the source copy kept between runs (see
      * uploadPath()) once no later run reads it: the upload finished (the
      * finalize stage never reads the video), failed for good, or starts over
@@ -613,13 +625,12 @@ class YouTubeDriver extends AbstractPlatform implements SupportsFirstComment
      * HTTP call fit in what is left of the job timeout
      * (PublishToConnectionJob::configuredTimeout()), counted from the start
      * of the run (a slow staging copy included, which the per-run budget does
-     * not count). The job can only tell that the video may exist when the
-     * driver had the chance to say so: a run the queue kills while the last
-     * chunk is in flight is reported as a plain timeout, not possibly
-     * published. So a run that has already sent chunks hands the last one to
-     * a fresh run instead. A run that has sent nothing always sends it: the
-     * next run would start from the same point, and handing over again could
-     * repeat forever.
+     * not count). A run the queue kills runs again (retriesKilledRun()) and
+     * asks the session first, but only once the queue's retry_after has
+     * passed, and only up to the job's tries; so a run that has already sent
+     * chunks hands the last one to a fresh run instead. A run that has sent
+     * nothing always sends it: the next run would start from the same point,
+     * and handing over again could repeat forever.
      */
     protected function lastChunkFits(float $runStartedAt, int $sent): bool
     {

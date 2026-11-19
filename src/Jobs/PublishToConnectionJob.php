@@ -193,7 +193,12 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
     /** Seconds one run may take (social.job_timeout, or derived per platform). */
     public ?int $timeout = null;
 
-    /** A run killed for timeout is failed (possiblyPublished in a commit phase), not retried blind. */
+    /**
+     * A run killed for timeout is failed (possiblyPublished in a commit phase),
+     * not retried blind. Steps the driver can safely run again
+     * (AbstractPlatform::retriesKilledRun(): the YouTube upload) are queued
+     * with false, so the queue runs them again after retry_after.
+     */
     public bool $failOnTimeout = true;
 
     public int $maxExceptions = 3;
@@ -1576,25 +1581,31 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
         $commit = $this->commits || $this->committed || $status === AtomicIdempotencyStore::STATUS_COMMITTING;
         $timeout = $e !== null && is_a($e, 'Illuminate\Queue\TimeoutExceededException');
         $what = $timeout ? 'timed out' : ($e !== null ? 'stopped ('.class_basename($e).')' : 'stopped');
+        // The queue gave up on a step it re-runs after a kill (the YouTube
+        // upload): the last kill may have hit its final request.
+        $killedRerun = ! $commit && ! $this->failOnTimeout && $e !== null && is_a($e, 'Illuminate\Queue\MaxAttemptsExceededException');
+        $possibly = $commit || $killedRerun;
 
         $exception = new PermanentException(
-            $commit
-                ? "The {$this->platform->value} publish {$what} during a create step; the post may be live. Check the platform before re-posting."
-                : "The {$this->platform->value} publish {$what}".($e !== null ? ': '.$this->redact($e->getMessage()) : '.'),
+            match (true) {
+                $commit => "The {$this->platform->value} publish {$what} during a create step; the post may be live. Check the platform before re-posting.",
+                $killedRerun => "The {$this->platform->value} publish {$what} during an upload step that may have sent its last part; the post may be live. Check the platform before re-posting.",
+                default => "The {$this->platform->value} publish {$what}".($e !== null ? ': '.$this->redact($e->getMessage()) : '.'),
+            },
             $this->platform,
-            $commit ? FailureReason::OutcomeUnknown : ($timeout ? FailureReason::Timeout : FailureReason::Unknown),
+            $possibly ? FailureReason::OutcomeUnknown : ($timeout ? FailureReason::Timeout : FailureReason::Unknown),
             ['unexpected' => true, 'exception' => $e !== null ? $e::class : null, 'timeout' => $timeout]
-                + ($commit ? ['possibly_published' => true] : []),
+                + ($possibly ? ['possibly_published' => true] : []),
             $e,
         );
 
         if ($store !== null) {
             try {
-                if ($commit && $store instanceof AtomicIdempotencyStore) {
+                if ($possibly && $store instanceof AtomicIdempotencyStore) {
                     $store->markFailed($key, $this->state !== null
                         ? $this->storedState($this->state, $this->commits, $this->committed, $this->deadline)
                         : null);
-                } elseif (! $commit) {
+                } elseif (! $possibly) {
                     $store->forget($key);
                 }
 
@@ -1830,10 +1841,34 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
         $next->commitSent = (bool) $o['commitSent'];
         $next->notBefore = null;
         $next->maxPolls = $this->maxPolls;
+        $next->failOnTimeout = ! $this->retriesKilledRun($next->state);
 
         $this->propagateQueue($next);
 
         return $next;
+    }
+
+    /**
+     * Whether the driver runs a step with $state again safely after the queue
+     * killed it (AbstractPlatform::retriesKilledRun()). False when it cannot
+     * tell: a killed run then fails, as before.
+     *
+     * @param  array<string, mixed>|null  $state
+     */
+    protected function retriesKilledRun(?array $state): bool
+    {
+        if ($state === null) {
+            return false;
+        }
+
+        try {
+            $driver = is_array($this->run) ? ($this->run['driver'] ?? null) : null;
+            $driver ??= Container::getInstance()->make(SocialManager::class)->driver($this->platform->value);
+
+            return $driver instanceof AbstractPlatform && $driver->retriesKilledRun(Pending::withoutReservedKeys($state));
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     protected function propagateQueue(object $job): void

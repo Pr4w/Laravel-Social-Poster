@@ -593,7 +593,8 @@ settings (`api.youtube.upload_run_seconds` is read with 240 there unless you set
 connection that runs the job needs a `retry_after` longer than that, or the queue hands a running upload
 to a second worker; the service provider logs a warning at boot when it is not. The run that stages the
 source (see [Large videos](#large-videos)) also takes the copy time: keep that inside the job timeout.
-A run killed by the job timeout is failed, not retried (see [Duplicate safety](#duplicate-safety)).
+A run killed by the job timeout is failed, except an upload run, which the queue runs again after
+`retry_after` (see [Duplicate safety](#duplicate-safety)).
 
 ---
 
@@ -716,7 +717,7 @@ channel, what happened.
 | Situation | What the driver does |
 |---|---|
 | A worker process died and the queue redelivered the job, or a run is retried after a Temporary failure | The run sends an empty `PUT` with `Content-Range: bytes */{size}` before any byte. `308`: continue at the stored offset. `200`/`201`: the finished video, no second upload |
-| The job timeout killed a run | Not retried (`failOnTimeout`): `PostFailed(Timeout)`, with `possiblyPublished = true` only when the chain was already committed (a stall after the last chunk, or the finalize stage). To keep the last chunk out of reach of the job timeout, a run that has already sent chunks hands the last chunk to a fresh run unless the chunk's `upload_timeout` plus one HTTP call still fit in what is left of the job timeout (`PublishToConnectionJob::configuredTimeout()`, counted from the start of the run, staging included). A run killed anyway while it sends the last chunk is reported with `possiblyPublished = false` and the key is forgotten, although the video may exist: a run that sends the last chunk first (a one-chunk video, or a fresh run after a hand-over) when the job timeout is below `upload_timeout` plus one HTTP call or a slow staging copy came first, or follow-ups (thumbnail, playlists) that outlast what is left |
+| The job timeout killed a run | An upload run is queued with `failOnTimeout = false`: the queue runs it again once `retry_after` has passed, and that run asks the session first, so a video whose last chunk arrived is found and published, and an unfinished upload continues from the session's offset. If the queue gives up on it (the job's tries or `maxExceptions`), `PostFailed(OutcomeUnknown)` with `possiblyPublished = true`, and the key is kept, since the last kill may have hit the last chunk. Other runs are not retried: `PostFailed(Timeout)`, with `possiblyPublished = true` only when the chain was already committed (a stall after the last chunk, or the finalize stage). A run that has already sent chunks still hands the last chunk to a fresh run unless the chunk's `upload_timeout` plus one HTTP call fit in what is left of the job timeout, which saves the `retry_after` wait |
 | A chunk's connection was lost, or it got 408/5xx | The session is kept, the offset forgotten, and the next run asks the session. When it was the last chunk, the wait is committed: a later failure is reported with `possiblyPublished = true`, unless it is one of the definitive refusals below |
 | Every byte acknowledged, but no video in the answer | The run asks the session for the final answer; if there is still none, a committed wait |
 | The session expired (404/410) before the last chunk | A new session from byte 0 (an unfinished session creates no video), at most 2 times |
@@ -819,11 +820,9 @@ driver: every step declares its own deadline.
   download must finish within `social.download_timeout` (120 s), and the copy time adds to that run.
   Raise `social.download_timeout` and `social.job_timeout` (with the queue's `retry_after`) for large
   files on such hosts or on cloud disks, or use a local file.
-- A run killed by the job timeout while it sends the last chunk is reported as not published, although
-  the video may exist. A run that has already sent chunks leaves the last chunk to a fresh run when it
-  may not fit, so this needs a run that starts with the last chunk (a one-chunk video, a fresh run)
-  and a job timeout below `upload_timeout` plus one HTTP call (or a slow staging copy before it), or
-  follow-ups (thumbnail, playlists) that outlast what is left of it.
+- An upload run killed by the job timeout runs again only after the queue's `retry_after`, so the
+  video goes out that much later. Once the queue gives up on it, it is reported as possibly published,
+  even if the kills hit earlier chunks.
 - Uploads that outlast the token need a `CredentialsResolver` that refreshes it.
 - After a session expired following the last chunk, the outcome is unknown; the driver does not search
   the channel.
