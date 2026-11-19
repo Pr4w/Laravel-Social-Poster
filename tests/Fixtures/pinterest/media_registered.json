@@ -9,7 +9,7 @@
     "x-amz-algorithm": "AWS4-HMAC-SHA256",
     "key": "uploads/11/aa/22/3:video:203014033110991560:5212123920968240771",
     "policy": "eyJleHBpcmF0aW9uIjoiMj..==",
-    "x-amz-credential": "ASIA6QZJ64OPIKV7FRVX/20261118/us-east-1/s3/aws4_request",
+    "x-amz-credential": "ASIAIOSFODNN7EXAMPLE/20261118/us-east-1/s3/aws4_request",
     "Content-Type": "multipart/form-data"
   }
 }
