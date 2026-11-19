@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.5] - 2026-11-19
+
+### Changed
+
+- `guzzlehttp/guzzle` is now `^7.8|^8.0`, so apps on Guzzle 8 can install the package. Verified with
+  Guzzle 8.5.2 (`guzzlehttp/psr7` 3.5, `guzzlehttp/promises` 3.1) on Laravel 13: full suite and
+  PHPStan pass. Laravel 12 still resolves Guzzle 7.
+
+### Fixed
+
+- README, queue requirements: a YouTube upload run killed by its timeout is redelivered (since
+  1.1.3); the section still said every killed publish run fails.
+
 ## [1.1.4] - 2026-11-19
 
 ### Changed
@@ -371,6 +384,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.5]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.0...v1.1.2

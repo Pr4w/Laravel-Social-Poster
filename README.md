@@ -912,8 +912,9 @@ re-publish it with `--force`.
   default, 400 s for Threads. The `retry_after` warning counts it too: with a low `social.job_timeout`,
   the comment run can be the longer one.
 - A publish run killed by its timeout is failed, not retried blind: inside a create step it is
-  reported as `OutcomeUnknown` with `possiblyPublished`. A killed comment run is redelivered as a
-  recovery instead.
+  reported as `OutcomeUnknown` with `possiblyPublished`. Two exceptions are redelivered once
+  `retry_after` has passed: a YouTube upload run, which asks the upload session first (when the queue
+  gives up on it, `OutcomeUnknown` with `possiblyPublished`), and a comment run, as a recovery.
 - **A shared cache store.** The unique-dispatch locks, the step locks and, with
   `CacheIdempotencyStore`, the records and leases live in the cache (`social.lock_store`,
   `social.idempotency_cache_store`, else `cache.default`). An `array` or `null` store on an
