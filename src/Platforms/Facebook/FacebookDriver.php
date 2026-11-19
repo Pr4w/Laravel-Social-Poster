@@ -23,6 +23,7 @@ use SocialPoster\Enums\Feature;
 use SocialPoster\Enums\Ingestion;
 use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\SocialPosterException;
 use SocialPoster\Exceptions\TemporaryException;
@@ -948,7 +949,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments, Suppo
             'phase' => 'reel_finish',
             'video_id' => $videoId,
             'caption' => trim((string) $post->caption()),
-        ], $this->finishDelay());
+        ], $this->finishDelay())->withReason(PostProcessing::REASON_PROCESSING);
     }
 
     /** @param array<string, mixed> $state */
@@ -1001,7 +1002,7 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments, Suppo
         return $this->commit([
             'phase' => 'story_finish',
             'video_id' => $videoId,
-        ], $this->finishDelay());
+        ], $this->finishDelay())->withReason(PostProcessing::REASON_PROCESSING);
     }
 
     /** @param array<string, mixed> $state */
@@ -1145,7 +1146,8 @@ class FacebookDriver extends AbstractPlatform implements SupportsComments, Suppo
         $checks = (int) ($state['upload_checks'] ?? 0);
 
         if ($this->uploadInProgress($status) && $checks < (int) $this->apiConfig('upload_checks', 10)) {
-            return $this->commit(['upload_checks' => $checks + 1] + Pending::withoutReservedKeys($state), 30);
+            return $this->commit(['upload_checks' => $checks + 1] + Pending::withoutReservedKeys($state), 30)
+                ->withReason(PostProcessing::REASON_PROCESSING);
         }
 
         return null;

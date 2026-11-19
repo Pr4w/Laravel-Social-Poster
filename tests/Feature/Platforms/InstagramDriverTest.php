@@ -18,6 +18,7 @@ use SocialPoster\Enums\FailureReason;
 use SocialPoster\Enums\Feature;
 use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\TemporaryException;
 use SocialPoster\Platforms\Instagram\InstagramOptions;
@@ -809,6 +810,37 @@ it('polls a not-ready container every minute, then backs off, within the contain
         ->and($sixth->state['not_ready'])->toBe(6)
         ->and($sixth->state['not_before'])->toBeGreaterThanOrEqual(time() + 1790)
         ->and($sixth->state['not_before'])->toBeLessThanOrEqual(time() + 1800);
+});
+
+it('says why each wait of the publish step happens, on every hop of a long one', function () {
+    config(['social.api.instagram.not_ready_backoff' => 1800]);
+    igFake([IG_PUBLISH => igErr('not_ready'), 'GET /c1' => igStatus('FINISHED')]);
+
+    $createdAt = time() - 600;
+    $first = igDriver()->resume(igPost(), igPublishState(['created_at' => $createdAt]));
+    $sixth = igDriver()->resume(igPost(), igPublishState(['created_at' => $createdAt, 'not_ready' => 5, 'ready' => false]));
+    $hop = igDriver()->resume(igPost(), $sixth->state);
+    $restored = igDriver()->resume(igPost(), igPublishState(['not_before' => time() - 1, 'wait_reason' => 'not_ready', 'ready' => false]));
+
+    expect($first->reason)->toBe(PostProcessing::REASON_NOT_READY)
+        ->and($sixth->reason)->toBe(PostProcessing::REASON_NOT_READY)
+        ->and($sixth->state['wait_reason'])->toBe(PostProcessing::REASON_NOT_READY)
+        // A hop of the long wait, still more than the queue can delay at once.
+        ->and($hop->reason)->toBe(PostProcessing::REASON_NOT_READY)
+        ->and($hop->state['wait_reason'])->toBe(PostProcessing::REASON_NOT_READY)
+        // The wait is over: the next wait has its own reason (here the media is still not ready).
+        ->and($restored->reason)->toBe(PostProcessing::REASON_NOT_READY)
+        ->and($restored->state)->not->toHaveKey('wait_reason');
+});
+
+it('says the publish step verifies after a lost answer, and retries after a temporary refusal', function () {
+    igFake([IG_PUBLISH => igSeq(fn (Request $request) => (Http::failedConnection('cURL error 28: Operation timed out'))($request), igErr('app_throttle'))]);
+
+    $lost = igDriver()->resume(igPost(), igPublishState());
+    $throttled = igDriver()->resume(igPost(), igPublishState());
+
+    expect($lost->reason)->toBe(PostProcessing::REASON_VERIFYING)
+        ->and($throttled->reason)->toBe(PostProcessing::REASON_RETRYING);
 });
 
 it('never schedules a not-ready wait past the container lifetime', function () {

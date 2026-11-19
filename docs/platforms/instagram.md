@@ -406,11 +406,12 @@ Container failures carry `possibly_published = false`: such a container was neve
 What each `Pending` means:
 
 - **Processing waits** (`await_*`) and the **`restart` hop** are plain `Pending`s. The job fires
-  `PostProcessing` for each of them.
+  `PostProcessing` for each of them (`reason` `processing`).
 - **The `publish` phase** is a commit `Pending` (`commits = true`): the next run calls `media_publish`, the
-  only call that creates a post. The rounds that stay in that phase (not ready, a 2207008 retry, a throttle
-  or an ambiguous answer being verified, a long wait split into hops) are commit `Pending`s too, without
-  `PostProcessing`.
+  only call that creates a post. The hop into it fires no event. The rounds that stay in that phase are
+  commit `Pending`s too, and each fires `PostProcessing` with its `reason`: `not_ready` (2207027, on
+  every hop of a long wait), `verifying` (an ambiguous answer being checked), `retrying` (a 2207008
+  retry, a throttle). An app can show these as "slow processing".
 - Re-creating containers from the `publish` phase runs on a hop of its own (`restart`, recheck 0), outside
   the commit. That is one extra queue hop and one `PostProcessing` event, and a failure while re-creating
   is reported with `possiblyPublished = false`. From the polling phases the new containers are created in

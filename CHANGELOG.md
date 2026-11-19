@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.4] - 2026-11-19
+
+### Changed
+
+- `PostProcessing` now fires during the waits of a create step too (Instagram media not ready, a
+  publish being verified after a lost answer, a temporary refusal being retried), not only during
+  processing polls. It is still not fired for the immediate hop into a create. It carries a new
+  `reason`: `processing`, `not_ready`, `verifying`, `retrying`, or null when the driver does not say.
+  Drivers set it with `Pending::withReason()`.
+
 ## [1.1.3] - 2026-11-19
 
 ### Changed
@@ -361,6 +371,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.4]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.0...v1.1.2
 [1.1.0]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.0.0...v1.1.0

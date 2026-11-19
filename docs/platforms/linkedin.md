@@ -505,7 +505,8 @@ payload holds `comment_id`, `comment_urn` and `response`. Outcomes arrive as `Co
 ## Async behaviour
 
 A publish is a small state machine. Each step is one job run, and the job carries the state between
-runs. `PostProcessing` fires for every wait that is not a commit step.
+runs. `PostProcessing` fires for every wait, a commit step's included (`reason` `verifying` while an
+earlier create is checked); not for the immediate hop into a create.
 
 | Phase (`state['phase']`) | What happens | Next |
 |---|---|---|

@@ -391,7 +391,7 @@ described under [Duplicate safety](#duplicate-safety).
 ## Async behaviour
 
 Every Threads post goes through a container. Each step below is one job run; the job carries the
-state between runs. `PostProcessing` fires for every wait that is not a commit.
+state between runs. `PostProcessing` fires for every wait; not for the immediate hop into the publish.
 
 | Phase (`state['phase']`) | What happens | Next |
 |---|---|---|

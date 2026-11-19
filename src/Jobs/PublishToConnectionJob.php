@@ -1170,8 +1170,21 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
             'commitSent' => $sentCommit,
         ]);
 
-        if (! $pending->commits) {
-            $this->safeDispatch(new PostProcessing($this->platform, $poll, $now - $startedAt, $this->post->metadata, $this->correlationId));
+        // Every wait, a create step's too (media not ready, an earlier attempt
+        // being verified, a temporary refusal); not the immediate hop into a create.
+        if (! $pending->commits || $pending->recheckAfter > 0) {
+            $this->safeDispatch(new PostProcessing(
+                $this->platform,
+                $poll,
+                $now - $startedAt,
+                $this->post->metadata,
+                $this->correlationId,
+                $pending->reason ?? match (true) {
+                    $sentCommit => PostProcessing::REASON_VERIFYING,
+                    ! $pending->commits => PostProcessing::REASON_PROCESSING,
+                    default => null,
+                },
+            ));
         }
 
         $this->renewLease($this->delayFor($pending->recheckAfter));

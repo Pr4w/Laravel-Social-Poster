@@ -22,6 +22,7 @@ use SocialPoster\Enums\Feature;
 use SocialPoster\Enums\Ingestion;
 use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\SocialPosterException;
 use SocialPoster\Exceptions\TemporaryException;
@@ -482,10 +483,12 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
         $notBefore = (int) ($state['not_before'] ?? 0);
 
         if ($notBefore > time() + 5) {
-            return $this->again($state, $notBefore - time(), ($state['phase'] ?? null) === 'publish');
+            $reason = $state['wait_reason'] ?? null;
+
+            return $this->again($state, $notBefore - time(), ($state['phase'] ?? null) === 'publish', is_string($reason) ? $reason : null);
         }
 
-        unset($state['not_before']);
+        unset($state['not_before'], $state['wait_reason']);
 
         return match ($state['phase'] ?? null) {
             'await_container' => $this->awaitContainer($post, $state),
@@ -567,7 +570,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
         return $this->again($this->baseState($post, $isStory ? 'STORIES' : 'REELS') + [
             'phase' => 'await_container',
             'container_id' => $id,
-        ], $this->firstPollAfter());
+        ], $this->firstPollAfter(), false, PostProcessing::REASON_PROCESSING);
     }
 
     protected function awaitContainer(PreparedPost $post, array $state): PublishOutcome
@@ -598,7 +601,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             'phase' => 'await_children',
             'children' => $children,
             'pending_videos' => $pendingVideos,
-        ], $pendingVideos === [] ? 5 : (int) $this->apiConfig('first_video_poll_after', 60));
+        ], $pendingVideos === [] ? 5 : (int) $this->apiConfig('first_video_poll_after', 60), false, PostProcessing::REASON_PROCESSING);
     }
 
     /**
@@ -674,7 +677,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
         $state['poll_errors'] = 0;
 
         if ($stillPending !== []) {
-            return $this->again($state, $this->pollInterval());
+            return $this->again($state, $this->pollInterval(), false, PostProcessing::REASON_PROCESSING);
         }
 
         $params = ['media_type' => 'CAROUSEL', 'children' => implode(',', $children)];
@@ -683,7 +686,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
 
         $id = $this->createContainer($post, $this->containerParams($post, $params, false), 'carousel container');
 
-        return $this->again(['phase' => 'await_carousel', 'container_id' => $id] + $state, $this->firstPollAfter());
+        return $this->again(['phase' => 'await_carousel', 'container_id' => $id] + $state, $this->firstPollAfter(), false, PostProcessing::REASON_PROCESSING);
     }
 
     /**
@@ -743,7 +746,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             'EXPIRED' => $this->containerExpired($post, $state),
             default => $this->tooOld($state)
                 ? $this->containerExpired($post, $state)
-                : $this->again($state, $this->pollInterval()),
+                : $this->again($state, $this->pollInterval(), false, PostProcessing::REASON_PROCESSING),
         };
     }
 
@@ -813,7 +816,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
                 case 'IN_PROGRESS':
                     $state['phase'] = ($state['media_type'] ?? null) === 'CAROUSEL' ? 'await_carousel' : 'await_container';
 
-                    return $this->again($state, $this->pollInterval());
+                    return $this->again($state, $this->pollInterval(), false, PostProcessing::REASON_PROCESSING);
             }
         }
 
@@ -847,7 +850,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             $state['builder_retries'] = (int) ($state['builder_retries'] ?? 0) + 1;
             $state['ready'] = true;
 
-            return $this->again($state, self::BUILDER_RETRY_AFTER, true);
+            return $this->again($state, self::BUILDER_RETRY_AFTER, true, PostProcessing::REASON_RETRYING);
         }
 
         if (in_array($subcode, self::RESTART_ERROR_SUBCODES, true)) {
@@ -942,7 +945,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
                     ? max($this->pollInterval(), $e->retryAfter)
                     : $this->pollInterval();
 
-                return $this->again($state, $delay, true);
+                return $this->again($state, $delay, true, PostProcessing::REASON_VERIFYING);
             }
         }
 
@@ -1063,7 +1066,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             ? max($this->pollInterval(), $e->retryAfter)
             : $this->pollInterval();
 
-        return $this->again($state, $delay, true);
+        return $this->again($state, $delay, true, empty($state['ambiguous']) ? PostProcessing::REASON_RETRYING : PostProcessing::REASON_VERIFYING);
     }
 
     /**
@@ -1091,7 +1094,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             $delay = min($delay, max($this->pollInterval(), $createdAt + $this->containerMaxAge() - time()));
         }
 
-        return $this->again($state, $delay, true);
+        return $this->again($state, $delay, true, PostProcessing::REASON_NOT_READY);
     }
 
     // --- Container failures and restarts -----------------------------------------
@@ -1248,7 +1251,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             ? max($this->pollInterval(), $e->retryAfter)
             : $this->pollInterval();
 
-        return $this->again($state, $delay, $commit);
+        return $this->again($state, $delay, $commit, empty($state['ambiguous']) ? PostProcessing::REASON_PROCESSING : PostProcessing::REASON_VERIFYING);
     }
 
     // --- Recovery of a published container ---------------------------------------
@@ -1763,20 +1766,27 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
      * carry a deadline past the job's default max_wait, bounded by the
      * container's lifetime: the driver's own budgets end them first, with a
      * failure that says whether the post may be live (the job's timeout cannot
-     * know). Job-owned '_' keys are not carried forward.
+     * know). Job-owned '_' keys are not carried forward. $reason
+     * (PostProcessing::REASON_*) reaches the app as PostProcessing::$reason,
+     * on every hop of a long wait.
      *
      * @param  array<string, mixed>  $state
      */
-    protected function again(array $state, int $delay, bool $commit = false): Pending
+    protected function again(array $state, int $delay, bool $commit = false, ?string $reason = null): Pending
     {
         $state = Pending::withoutReservedKeys($state);
-        unset($state['not_before']);
+        unset($state['not_before'], $state['wait_reason']);
 
         $max = $this->clampDelay(PHP_INT_MAX);
 
         if ($delay > $max) {
             $state['not_before'] = time() + $delay;
             $delay = $max;
+
+            if ($reason !== null) {
+                // The later hops of this wait report the same reason.
+                $state['wait_reason'] = $reason;
+            }
         } elseif ($delay > 0) {
             $delay = $this->clampDelay($delay);
         } else {
@@ -1789,9 +1799,11 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             : null;
 
         // A publish whose earlier answer was lost: the post may exist.
-        return $commit
+        $pending = $commit
             ? $this->commit($state, $delay, $deadline, ! empty($state['ambiguous']))
             : PublishOutcome::pending($state, $delay, false, $deadline);
+
+        return $pending->withReason($reason);
     }
 
     /**

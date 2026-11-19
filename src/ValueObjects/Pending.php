@@ -28,6 +28,8 @@ namespace SocialPoster\ValueObjects;
  *   its own exits (deadline, publish window, exhausted tries, a failure the
  *   driver did not flag, a restart) report the post as possibly published and
  *   keep the record for reconcile instead of forgetting it.
+ * - $reason: why the publish waits (a PostProcessing::REASON_* value), handed
+ *   to the app as PostProcessing::$reason. Set it with withReason().
  *
  * Reserved state keys. Keys starting with '_' are written by the job only, on
  * every run; drivers read them and never set them (a value a driver carries
@@ -70,6 +72,7 @@ final class Pending extends PublishOutcome
      * @param  bool  $committed  The post (or the platform's publish job) already exists.
      * @param  ?int  $deadline  Absolute unix time the driver expects completion by.
      * @param  bool  $possiblySent  The create of the run that returned this may have gone out; the next step verifies.
+     * @param  ?string  $reason  Why the publish waits, for PostProcessing::$reason (its REASON_* values).
      */
     public function __construct(
         public readonly array $state,
@@ -78,6 +81,7 @@ final class Pending extends PublishOutcome
         public readonly bool $committed = false,
         public readonly ?int $deadline = null,
         public readonly bool $possiblySent = false,
+        public readonly ?string $reason = null,
     ) {}
 
     /**
@@ -88,7 +92,13 @@ final class Pending extends PublishOutcome
      */
     public function withState(array $state): self
     {
-        return new self($state, $this->recheckAfter, $this->commits, $this->committed, $this->deadline, $this->possiblySent);
+        return new self($state, $this->recheckAfter, $this->commits, $this->committed, $this->deadline, $this->possiblySent, $this->reason);
+    }
+
+    /** The same outcome with the reason the publish waits (PostProcessing::REASON_*). */
+    public function withReason(?string $reason): self
+    {
+        return new self($this->state, $this->recheckAfter, $this->commits, $this->committed, $this->deadline, $this->possiblySent, $reason);
     }
 
     /** True for a job-owned state key ('_' prefix). */

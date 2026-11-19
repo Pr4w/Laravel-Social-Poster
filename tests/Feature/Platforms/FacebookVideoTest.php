@@ -11,6 +11,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use SocialPoster\Enums\FailureReason;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\SocialPosterException;
 use SocialPoster\Exceptions\TemporaryException;
@@ -273,6 +274,7 @@ it('uploads a vertical video as a Reel and commits the finish a minute later', f
     expect($outcome)->toBeInstanceOf(Pending::class)
         ->and($outcome->commits)->toBeTrue()
         ->and($outcome->recheckAfter)->toBe(60)
+        ->and($outcome->reason)->toBe(PostProcessing::REASON_PROCESSING)
         ->and($outcome->state)->toBe(['phase' => 'reel_finish', 'video_id' => '7788', 'caption' => 'Reel caption']);
 
     Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/video_reels') && $request['upload_phase'] === 'start');
@@ -438,6 +440,7 @@ it('waits for an upload Facebook is still fetching, then finishes anyway after t
     expect($wait)->toBeInstanceOf(Pending::class)
         ->and($wait->commits)->toBeTrue()
         ->and($wait->recheckAfter)->toBe(30)
+        ->and($wait->reason)->toBe(PostProcessing::REASON_PROCESSING)
         ->and($wait->state)->toBe(['upload_checks' => 1, 'phase' => 'reel_finish', 'video_id' => '7788', 'caption' => 'c']);
     Http::assertNotSent(fn (Request $request) => $request->method() === 'POST');
 

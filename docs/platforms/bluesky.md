@@ -520,7 +520,7 @@ and its payload holds `uri`, `cid`, `did`, `rkey` (and `recovered`). Outcomes ar
 ## Async behaviour
 
 A publish is a small state machine. Each step is one job run, and the job carries the state from one
-run to the next. `PostProcessing` fires for every wait except the one before the create.
+run to the next. `PostProcessing` fires for every wait; not for the immediate hop into the create.
 
 | Phase (`state['phase']`) | What happens | Next |
 |---|---|---|

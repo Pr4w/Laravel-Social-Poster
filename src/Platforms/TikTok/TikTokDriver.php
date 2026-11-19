@@ -18,6 +18,7 @@ use SocialPoster\Enums\Feature;
 use SocialPoster\Enums\Ingestion;
 use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\SocialPosterException;
 use SocialPoster\Exceptions\TemporaryException;
@@ -691,7 +692,8 @@ class TikTokDriver extends AbstractPlatform
 
         $state['init_attempts'] = $attempts + 1;
 
-        return $this->commitInit($state, $this->clampDelay($exception->retryAfter ?? 60));
+        return $this->commitInit($state, $this->clampDelay($exception->retryAfter ?? 60))
+            ->withReason(PostProcessing::REASON_RETRYING);
     }
 
     /**

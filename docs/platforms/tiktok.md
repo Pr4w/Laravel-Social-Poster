@@ -448,7 +448,8 @@ In a fan-out, the comment still goes to the platforms that support one.
 ## Async behaviour
 
 Every TikTok post runs as a chain of job runs; the state travels with each continuation.
-`PostProcessing` fires for every wait that is not a commit step.
+`PostProcessing` fires for every wait (`reason` `retrying` while a refused init waits); not for the
+immediate hop into the init.
 
 | Phase (`state['phase']`) | What happens | Next |
 |---|---|---|

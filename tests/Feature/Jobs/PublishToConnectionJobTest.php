@@ -1469,6 +1469,42 @@ it('encrypts the payload when the app has a key', function () {
     expect(eventsOf($events, PostPublished::class))->toHaveCount(1);
 });
 
+it('reports every wait as PostProcessing with its reason, but not the hop into a create', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        PublishOutcome::pending(['phase' => 'await'], 30),
+        PublishOutcome::commit(['phase' => 'create']),
+        PublishOutcome::commit(['phase' => 'create'], 60)->withReason(PostProcessing::REASON_NOT_READY),
+        PublishOutcome::commit(['phase' => 'verify'], 30, null, true),
+        PublishOutcome::commit(['phase' => 'create'], 45),
+        published(),
+    ];
+
+    push(publishJob());
+    work();
+
+    expect(array_map(fn (PostProcessing $event) => $event->reason, eventsOf($events, PostProcessing::class)))->toBe([
+        PostProcessing::REASON_PROCESSING,
+        PostProcessing::REASON_NOT_READY,
+        PostProcessing::REASON_VERIFYING,
+        null,
+    ])
+        ->and(array_map(fn (PostProcessing $event) => $event->poll, eventsOf($events, PostProcessing::class)))->toBe([1, 3, 4, 5])
+        ->and(eventsOf($events, PostPublished::class))->toHaveCount(1);
+});
+
+it('keeps the wait reason on a Pending rebuilt with another state', function () {
+    $pending = PublishOutcome::commit(['phase' => 'create'], 60)->withReason(PostProcessing::REASON_NOT_READY);
+    $moved = $pending->withState(['phase' => 'create', 'extra' => 1]);
+
+    expect($moved->reason)->toBe(PostProcessing::REASON_NOT_READY)
+        ->and($moved->commits)->toBeTrue()
+        ->and($moved->recheckAfter)->toBe(60)
+        ->and(PublishOutcome::pending([])->reason)->toBeNull();
+});
+
 it('keeps failing a killed run of a step its driver cannot run again', function () {
     useDriver();
     useDatabaseQueue();

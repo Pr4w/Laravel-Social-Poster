@@ -755,7 +755,7 @@ an event queued by an older release unserialises with the new properties at thei
 |---|---|---|
 | `PostQueued` | A publish job was accepted by the queue | `platform`, `post`, `metadata`, `correlationId`, `idempotencyKey` |
 | `PostDeduplicated` | A dispatch was dropped because the same key is already queued or running, or a redelivered copy of a finished step was dropped | `platform`, `key`, `metadata`, `correlationId` |
-| `PostProcessing` | Each processing poll of a continuation | `platform`, `poll`, `elapsedSeconds`, `metadata`, `correlationId` |
+| `PostProcessing` | Each wait of a continuation, a create step's included (not the immediate hop into a create) | `platform`, `poll`, `elapsedSeconds`, `metadata`, `correlationId`, `reason` (`processing`, `not_ready`, `verifying`, `retrying`, or null) |
 | `PostRetrying` | A transient failure; the job will try again | `platform`, `errorSummary`, `attempt`, `nextRetryAt`, `metadata`, `correlationId`; `reason()` |
 | `PostPublished` | The post exists (also scheduled, draft, private or processing: check `$result->state`) | `result`, `correlationId`, `idempotencyKey`, `attempt`, `replayed` |
 | `PostFailed` | Publishing failed for good | `platform`, `exception`, `metadata`, `correlationId`, `idempotencyKey`, `attempt`, `willRetry`, `possiblyPublished`; `errorSummary()` |

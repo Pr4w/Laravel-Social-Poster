@@ -18,6 +18,7 @@ use SocialPoster\Enums\FailureReason;
 use SocialPoster\Enums\Feature;
 use SocialPoster\Enums\MediaType;
 use SocialPoster\Enums\Platform;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Exceptions\PermanentException;
 use SocialPoster\Exceptions\SocialPosterException;
 use SocialPoster\Exceptions\TemporaryException;
@@ -911,6 +912,7 @@ it('waits as a fresh commit step when TikTok refuses the init with a code, up to
         ->and($first->commits)->toBeTrue()
         ->and($first->recheckAfter)->toBe(60)
         ->and($first->state['init_attempts'])->toBe(1)
+        ->and($first->reason)->toBe(PostProcessing::REASON_RETRYING)
         ->and($first->state['phase'])->toBe('init');
 
     $second = $driver->resume($post, $first->state);

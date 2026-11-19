@@ -30,6 +30,7 @@ use SocialPoster\Enums\Platform;
 use SocialPoster\Events\CommentFailed;
 use SocialPoster\Events\CommentPublished;
 use SocialPoster\Events\PostFailed;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Events\PostPublished;
 use SocialPoster\Jobs\AddFirstCommentJob;
 use SocialPoster\Jobs\PublishToConnectionJob;
@@ -256,6 +257,60 @@ it('reports an ambiguous publish it could not verify as possibly published and k
     'throttled reads' => ['user_throttle'],
     'outage' => ['graph_503'],
 ]);
+
+// --- PostProcessing during the publish step ------------------------------------
+
+/** @return list<?string> The reason of each PostProcessing, in order. */
+function igWaitReasons(ArrayObject $log): array
+{
+    return array_values(array_map(
+        fn (PostProcessing $event) => $event->reason,
+        array_filter($log->getArrayCopy(), fn ($event) => $event instanceof PostProcessing),
+    ));
+}
+
+it('tells the app the publish waits on media that is not ready, then publishes', function () {
+    $log = new ArrayObject;
+    Event::listen(PostProcessing::class, fn ($event) => $log->append($event));
+    Event::listen(PostPublished::class, fn ($event) => $log->append($event));
+
+    igFake([
+        IG_MEDIA => igRes(['id' => 'c1']),
+        IG_PUBLISH => igSeq(igErr('not_ready'), igErr('not_ready'), igRes(['id' => 'm1'])),
+        'GET /c1' => igStatus('FINISHED'),
+        'GET /m1' => igRes(['permalink' => 'https://www.instagram.com/p/M1/']),
+    ]);
+
+    dispatch(igPhotoJob());
+    igWork();
+
+    $published = array_values(array_filter($log->getArrayCopy(), fn ($event) => $event instanceof PostPublished));
+
+    // The hop into the publish step is not a wait: no event for it.
+    expect(igWaitReasons($log))->toBe([PostProcessing::REASON_NOT_READY, PostProcessing::REASON_NOT_READY])
+        ->and($published)->toHaveCount(1)
+        ->and($published[0]->result->platformPostId)->toBe('m1');
+});
+
+it('tells the app the publish is being verified after a lost answer', function () {
+    $log = new ArrayObject;
+    Event::listen(PostProcessing::class, fn ($event) => $log->append($event));
+    Event::listen(PostPublished::class, fn ($event) => $log->append($event));
+
+    igFake([
+        IG_MEDIA => igRes(['id' => 'c1']),
+        IG_PUBLISH => igTimedOut(),
+        'GET /c1' => igStatus('PUBLISHED'),
+        IG_LISTING => igRes(['data' => []]),
+    ]);
+
+    dispatch(igPhotoJob());
+    igWork();
+
+    expect(igWaitReasons($log))->toBe([PostProcessing::REASON_VERIFYING])
+        ->and(array_filter($log->getArrayCopy(), fn ($event) => $event instanceof PostPublished))->toHaveCount(1)
+        ->and(igSent(IG_PUBLISH))->toHaveCount(1);
+});
 
 // --- First comment: an attempt whose answer was lost is never posted twice -------
 
