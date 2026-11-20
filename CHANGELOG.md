@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.8] - 2026-11-20
+
+### Fixed
+
+- Pinterest: the create's refusal of a carousel whose images differ in shape ("Images must have the
+  same width/height ratios.") is now `PermanentException(MediaRejected)` with context
+  `carousel_ratio_mismatch`, a `user_fix`, instead of an unmapped `Unknown`.
+
+### Added
+
+- Pinterest: `validate()` refuses such a carousel before anything is sent when the images'
+  dimensions are known (inspector or `Media::$meta`), under `media.{index}`, naming both sizes. Ratios
+  within 1% of the first known image pass (`PinterestDriver::CAROUSEL_RATIO_TOLERANCE`).
+
 ## [1.1.7] - 2026-11-20
 
 ### Added
@@ -409,6 +423,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.8]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.4...v1.1.5

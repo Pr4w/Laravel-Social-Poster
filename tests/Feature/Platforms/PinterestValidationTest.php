@@ -86,6 +86,40 @@ it('accepts the three Pin shapes', function (array $media) {
     'one mov' => [[Media::video('https://cdn.example.com/clip.mov')]],
 ]);
 
+it('refuses a carousel whose images do not share one shape, when their dimensions are known', function () {
+    $media = [Media::image(K::IMG_A), Media::image(K::IMG_B), Media::image(K::IMG_C)];
+    $errors = errorsFor(K::post($media), [
+        K::IMG_A => new MediaMetadata(width: 1000, height: 1500),
+        K::IMG_B => new MediaMetadata(width: 800, height: 1200),
+        K::IMG_C => new MediaMetadata(width: 1080, height: 1080),
+    ]);
+
+    expect($errors)->toHaveKey('media.2')
+        ->and($errors)->not->toHaveKey('media.1')
+        ->and($errors['media.2'][0])->toContain('same width/height ratio')
+        ->and($errors['media.2'][0])->toContain('image 1 is 1000x1500 but image 3 is 1080x1080');
+});
+
+it('reads carousel shapes from Media::$meta too', function () {
+    $media = [
+        Media::image(K::IMG_A, meta: ['width' => 1080, 'height' => 1350]),
+        Media::image(K::IMG_B, meta: ['width' => 1080, 'height' => 1920]),
+    ];
+
+    expect(errorsFor(K::post($media)))->toHaveKey('media.1');
+});
+
+it('lets a carousel through when its shapes match within rounding, or are unknown', function (array $metadata) {
+    $media = [Media::image(K::IMG_A), Media::image(K::IMG_B), Media::image(K::IMG_C)];
+
+    expect(errorsFor(K::post($media), $metadata))->toBe([]);
+})->with([
+    'same ratio, other sizes' => [[K::IMG_A => new MediaMetadata(width: 1000, height: 1500), K::IMG_B => new MediaMetadata(width: 2000, height: 3000), K::IMG_C => new MediaMetadata(width: 600, height: 900)]],
+    'off by a pixel' => [[K::IMG_A => new MediaMetadata(width: 1080, height: 1350), K::IMG_B => new MediaMetadata(width: 1079, height: 1349)]],
+    'only one known' => [[K::IMG_A => new MediaMetadata(width: 1000, height: 1500)]],
+    'nothing known' => [[]],
+]);
+
 it('needs media, and refuses too many, mixed or unsupported items', function (array $media, string $key, string $message) {
     $errors = errorsFor(K::post($media));
 

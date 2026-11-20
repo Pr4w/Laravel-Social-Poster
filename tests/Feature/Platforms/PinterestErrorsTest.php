@@ -192,6 +192,26 @@ it('matches the other fetch wordings', function (string $message) {
     'Unable to reach the URL.',
 ]);
 
+it('maps a carousel whose images differ in shape to MediaRejected, not an unmapped error', function () {
+    Log::spy();
+    config(['social.error_logging' => true]);
+
+    $post = K::post([Media::image(K::IMG_A), Media::image(K::IMG_C)], options: new PinterestOptions(imageTransfer: PinterestImageTransfer::Url));
+    $e = createWith(K::error('carousel_ratio_mismatch', 400), $post);
+
+    expect($e)->toBeInstanceOf(PermanentException::class)
+        ->and($e->reason)->toBe(FailureReason::MediaRejected)
+        ->and($e->getMessage())->toContain('same width/height ratio')
+        ->and($e->getMessage())->toContain('Images must have the same width/height ratios')
+        ->and($e->context['carousel_ratio_mismatch'])->toBeTrue()
+        ->and($e->context['status'])->toBe(400)
+        ->and($e->errorSummary()['category'])->toBe('user_fix')
+        ->and($e->possiblyPublished())->toBeFalse();
+
+    Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context) => str_contains($message, 'pinterest API error')
+        && $context['unmapped'] === false);
+});
+
 it('leaves an unmapped 400 to the base classification, with Pinterest\'s message', function () {
     Log::spy();
     config(['social.error_logging' => true]);

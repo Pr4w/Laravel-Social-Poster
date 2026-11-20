@@ -86,6 +86,12 @@ SocialPoster::on('pinterest')
 Every item repeats the Pin link unless `carouselItems` overrides it. The Pin's `alt_text` is the
 first image's alt text (or `PinterestOptions::$altText`); the driver sends no per-item alt text.
 
+All images must share one width/height ratio: Pinterest refuses the carousel otherwise ("Images must
+have the same width/height ratios."). When their dimensions are known (the inspector, or
+`Media::$meta`), `validate()` refuses images whose ratio differs from the first known one by more than
+1% (`PinterestDriver::CAROUSEL_RATIO_TOLERANCE`), under `media.{index}`. Unknown dimensions are left to
+Pinterest, whose refusal is a `MediaRejected` failure.
+
 ### Video
 
 ```php
@@ -412,6 +418,7 @@ Pinterest errors are a top-level `{"code": int, "message": string}` (`error.mess
 | A message containing "not permitted" | Permanent | `InsufficientPermissions` | The account cannot save to that board |
 | 429 | Temporary | `RateLimited` | Retried after `Retry-After`, else 300 s |
 | 5xx | Temporary | `ServerError` | Retried after `max(60, Retry-After)` s. On the create, the retry looks the board up first |
+| A message about the images' "same width/height ratio" (a carousel of mixed shapes) | Permanent | `MediaRejected` | Context `carousel_ratio_mismatch`. Crop the images to one shape |
 | A message containing "could not fetch", "couldn't fetch" or "unable to reach" | Temporary | `Timeout` | Retried after 120 s. Context `fetch_failed`. In `Auto` mode the base64 retry runs first |
 | 403 on the create, message about a permission, scope or authorization | Permanent | `InsufficientPermissions` | Check the token's scopes and the board |
 | any other 403 on the create | Permanent | `MediaRejected` | Pinterest documents it as "image too small, too large or broken" |

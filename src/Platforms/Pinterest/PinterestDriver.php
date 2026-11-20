@@ -25,6 +25,7 @@ use SocialPoster\Platforms\AbstractPlatform;
 use SocialPoster\Support\RetryAfter;
 use SocialPoster\ValueObjects\Credentials;
 use SocialPoster\ValueObjects\Media;
+use SocialPoster\ValueObjects\MediaMetadata;
 use SocialPoster\ValueObjects\Pending;
 use SocialPoster\ValueObjects\PostResult;
 use SocialPoster\ValueObjects\PreparedPost;
@@ -91,6 +92,9 @@ class PinterestDriver extends AbstractPlatform
     public const MAX_LINK = 2048;
 
     public const MAX_IMAGES = 5;
+
+    /** How far two carousel image ratios may differ (relative) before validate() refuses them. */
+    public const CAROUSEL_RATIO_TOLERANCE = 0.01;
 
     /** Publish phases (Pending::$state['phase']). */
     public const PHASE_AWAIT_MEDIA = 'await_media';
@@ -277,9 +281,54 @@ class PinterestDriver extends AbstractPlatform
             }
         }
 
+        if ($isCarousel) {
+            $this->validateCarouselRatios($media, $errors);
+        }
+
         foreach (['board_id' => $this->credentialString($post->credentials, 'board_id') ?? $this->credentialString($post->credentials, 'account_id'), 'board_section_id' => $this->credentialString($post->credentials, 'board_section_id')] as $key => $value) {
             if ($value !== null && preg_match('/^\d+$/', $value) !== 1) {
                 $errors->add("credentials.{$key}", "The Pinterest {$key} credential must be numeric.");
+            }
+        }
+    }
+
+    /**
+     * Pinterest refuses a carousel whose images do not all share one
+     * width/height ratio ("Images must have the same width/height ratios.").
+     * Compared on the images whose dimensions are known (the inspector, or
+     * Media::$meta), against the first of them, with CAROUSEL_RATIO_TOLERANCE
+     * so that rounding (1080x1350 next to 1079x1349) never blocks a carousel
+     * Pinterest would take. Unknown dimensions are left to Pinterest.
+     *
+     * @param  list<Media>  $media
+     */
+    protected function validateCarouselRatios(array $media, MessageBag $errors): void
+    {
+        $known = [];
+
+        foreach ($media as $index => $item) {
+            $meta = $this->inspectMedia($item);
+
+            if ($meta?->aspectRatio() !== null) {
+                $known[$index] = $meta;
+            }
+        }
+
+        if (count($known) < 2) {
+            return;
+        }
+
+        $first = array_key_first($known);
+        $reference = (float) $known[$first]->aspectRatio();
+        $describe = static fn (int $index, MediaMetadata $meta): string => sprintf('image %d is %dx%d', $index + 1, $meta->width, $meta->height);
+
+        foreach ($known as $index => $meta) {
+            if (abs((float) $meta->aspectRatio() - $reference) / $reference > self::CAROUSEL_RATIO_TOLERANCE) {
+                $errors->add(
+                    "media.{$index}",
+                    'Every image of a Pinterest carousel must have the same width/height ratio: '
+                    .$describe($first, $known[$first]).' but '.$describe($index, $meta).'. Crop them to one shape.',
+                );
             }
         }
     }
@@ -1680,6 +1729,16 @@ class PinterestDriver extends AbstractPlatform
                 FailureReason::ServerError,
                 max(60, $this->retryAfterHeader($response) ?? 60),
                 $context,
+            );
+        }
+
+        if (str_contains($lower, 'same width/height ratio') || (str_contains($lower, 'same') && str_contains($lower, 'aspect ratio'))) {
+            // A carousel whose images do not share one shape: nothing was created.
+            return new PermanentException(
+                'Every image of a Pinterest carousel must have the same width/height ratio; crop them to one shape and post again.'.$detail,
+                Platform::Pinterest,
+                FailureReason::MediaRejected,
+                $context + ['carousel_ratio_mismatch' => true],
             );
         }
 
