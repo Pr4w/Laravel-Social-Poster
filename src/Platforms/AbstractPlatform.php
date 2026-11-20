@@ -111,6 +111,21 @@ abstract class AbstractPlatform implements SocialPlatform
         return false;
     }
 
+    /**
+     * The ids the platform already gave for a publish still in progress, read
+     * from the driver's state (or from a failure's context), so the app can
+     * match the platform's webhooks or dashboard to it before the publish ends:
+     * PostProcessing::$identifiers, and context['identifiers'] of PostFailed.
+     * Plain ids only, never tokens or upload URLs. Default: none.
+     *
+     * @param  array<string, mixed>  $state  The driver's state, without the job's reserved keys.
+     * @return array<string, string>
+     */
+    public function identifiersOf(array $state): array
+    {
+        return [];
+    }
+
     protected function rulesFor(PreparedPost $post): Capabilities
     {
         return $this->capabilities();

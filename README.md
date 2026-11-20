@@ -755,10 +755,10 @@ an event queued by an older release unserialises with the new properties at thei
 |---|---|---|
 | `PostQueued` | A publish job was accepted by the queue | `platform`, `post`, `metadata`, `correlationId`, `idempotencyKey` |
 | `PostDeduplicated` | A dispatch was dropped because the same key is already queued or running, or a redelivered copy of a finished step was dropped | `platform`, `key`, `metadata`, `correlationId` |
-| `PostProcessing` | Each wait of a continuation, a create step's included (not the immediate hop into a create) | `platform`, `poll`, `elapsedSeconds`, `metadata`, `correlationId`, `reason` (`processing`, `not_ready`, `verifying`, `retrying`, or null) |
+| `PostProcessing` | Each wait of a continuation, a create step's included (not the immediate hop into a create) | `platform`, `poll`, `elapsedSeconds`, `metadata`, `correlationId`, `reason` (`processing`, `not_ready`, `verifying`, `retrying`, or null), `identifiers` (ids the platform already gave, e.g. TikTok's `publish_id`; empty when none yet) |
 | `PostRetrying` | A transient failure; the job will try again | `platform`, `errorSummary`, `attempt`, `nextRetryAt`, `metadata`, `correlationId`; `reason()` |
 | `PostPublished` | The post exists (also scheduled, draft, private or processing: check `$result->state`) | `result`, `correlationId`, `idempotencyKey`, `attempt`, `replayed` |
-| `PostFailed` | Publishing failed for good | `platform`, `exception`, `metadata`, `correlationId`, `idempotencyKey`, `attempt`, `willRetry`, `possiblyPublished`; `errorSummary()` |
+| `PostFailed` | Publishing failed for good | `platform`, `exception` (`context['identifiers']` when the platform already gave ids), `metadata`, `correlationId`, `idempotencyKey`, `attempt`, `willRetry`, `possiblyPublished`; `errorSummary()` |
 | `CredentialsRejected` | A failure that needs a reconnect | `platform`, `accountKey`, `reason`, `terminal`, `metadata`, `errorSummary` |
 | `CommentPublished` | The first comment was added (or found already there) | `platform`, `postId`, `commentId`, `metadata`, `url`, `payload` |
 | `CommentFailed` | The first comment could not be added after its retries | `platform`, `postId`, `exception`, `metadata`, `attempt`; `errorSummary()` |

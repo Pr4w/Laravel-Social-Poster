@@ -237,6 +237,13 @@ afterEach(function () {
 
 // --- Identity, scopes, rules -------------------------------------------------------
 
+it('names the publish_id as the id TikTok already gave, once the init answered', function () {
+    expect(ttDriver()->identifiersOf(['publish_id' => ' v_pub_url~v2.123 ', 'upload_url' => 'https://open-upload.tiktokapis.com/x']))
+        ->toBe(['publish_id' => 'v_pub_url~v2.123'])
+        ->and(ttDriver()->identifiersOf(['phase' => 'init']))->toBe([])
+        ->and(ttDriver()->identifiersOf(['publish_id' => '']))->toBe([]);
+});
+
 it('identifies the account by open_id and needs only the access token', function () {
     $driver = ttDriver();
 

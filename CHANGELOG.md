@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.7] - 2026-11-20
+
+### Added
+
+- `PostProcessing::$identifiers`: the ids the platform already gave for a publish still in progress,
+  so an app can match the platform's webhooks to it before `PostPublished`. TikTok fills it with the
+  `publish_id` from the first wait after the init. A `PostFailed` after the init carries the same array
+  in `exception->context['identifiers']`, including when the worker gives up on a run. Drivers provide
+  them with `AbstractPlatform::identifiersOf()` (default: none). The property comes last with an empty
+  default, so a `PostProcessing` queued by an older release still unserialises. No tokens or upload
+  URLs are included.
+
 ## [1.1.6] - 2026-11-19
 
 ### Fixed
@@ -397,6 +409,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.7]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.3...v1.1.4

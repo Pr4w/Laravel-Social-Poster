@@ -34,6 +34,8 @@ class PostProcessing
      * @param  array<string, mixed>  $metadata  Caller correlation data from ->withMetadata().
      * @param  ?string  $correlationId  The id returned by post(), shared by a fan-out.
      * @param  ?string  $reason  Why the publish waits (a REASON_* value), or null when the driver does not say.
+     * @param  array<string, string>  $identifiers  Ids the platform already gave for this publish (TikTok:
+     *                                              publish_id, the key of its webhooks); empty when none yet.
      */
     public function __construct(
         public readonly Platform $platform,
@@ -42,5 +44,6 @@ class PostProcessing
         public readonly array $metadata = [],
         public readonly ?string $correlationId = null,
         public readonly ?string $reason = null,
+        public readonly array $identifiers = [],
     ) {}
 }

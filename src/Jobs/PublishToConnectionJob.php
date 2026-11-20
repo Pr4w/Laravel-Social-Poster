@@ -1184,6 +1184,7 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
                     ! $pending->commits => PostProcessing::REASON_PROCESSING,
                     default => null,
                 },
+                $this->identifiersOf($state),
             ));
         }
 
@@ -1436,6 +1437,7 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
     {
         $store = $this->store();
         $key = $this->run['key'] ?? $this->idempotencyKey();
+        $this->addIdentifiers($e, $state ?? $this->state);
 
         if ($possiblyPublished) {
             $e->withFlags(['possibly_published' => true]);
@@ -1461,6 +1463,22 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
 
         $this->cleanupMedia();
         $this->failJob($e);
+    }
+
+    /**
+     * Name the ids the platform already gave (context['identifiers']), from the
+     * step's state, else the failure's own context (a failure in the very run
+     * that got them). An existing 'identifiers' key is kept.
+     *
+     * @param  array<string, mixed>|null  $state
+     */
+    protected function addIdentifiers(SocialPosterException $e, ?array $state): void
+    {
+        $identifiers = $this->identifiersOf($state) + $this->identifiersOf($e->context);
+
+        if ($identifiers !== []) {
+            $e->addContext(['identifiers' => $identifiers]);
+        }
     }
 
     /**
@@ -1611,6 +1629,8 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
                 + ($possibly ? ['possibly_published' => true] : []),
             $e,
         );
+
+        $this->addIdentifiers($exception, $this->state);
 
         if ($store !== null) {
             try {
@@ -1875,13 +1895,50 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
         }
 
         try {
-            $driver = is_array($this->run) ? ($this->run['driver'] ?? null) : null;
-            $driver ??= Container::getInstance()->make(SocialManager::class)->driver($this->platform->value);
-
-            return $driver instanceof AbstractPlatform && $driver->retriesKilledRun(Pending::withoutReservedKeys($state));
+            return $this->platformDriver()?->retriesKilledRun(Pending::withoutReservedKeys($state)) ?? false;
         } catch (Throwable) {
             return false;
         }
+    }
+
+    /**
+     * The ids the platform already gave for this publish
+     * (AbstractPlatform::identifiersOf()), from a driver state or a failure's
+     * context: non-empty strings only, and empty when the driver cannot tell.
+     *
+     * @param  array<string, mixed>|null  $state
+     * @return array<string, string>
+     */
+    protected function identifiersOf(?array $state): array
+    {
+        if ($state === null || $state === []) {
+            return [];
+        }
+
+        try {
+            $identifiers = $this->platformDriver()?->identifiersOf(Pending::withoutReservedKeys($state)) ?? [];
+        } catch (Throwable) {
+            return [];
+        }
+
+        return array_filter(
+            $identifiers,
+            static fn ($value, $key) => is_string($key) && is_string($value) && $value !== '',
+            ARRAY_FILTER_USE_BOTH,
+        );
+    }
+
+    /** This run's driver, else the platform's, when it is a first-party style AbstractPlatform. */
+    protected function platformDriver(): ?AbstractPlatform
+    {
+        try {
+            $driver = is_array($this->run) ? ($this->run['driver'] ?? null) : null;
+            $driver ??= Container::getInstance()->make(SocialManager::class)->driver($this->platform->value);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $driver instanceof AbstractPlatform ? $driver : null;
     }
 
     protected function propagateQueue(object $job): void

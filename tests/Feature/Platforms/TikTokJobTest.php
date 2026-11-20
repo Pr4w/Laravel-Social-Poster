@@ -21,6 +21,7 @@ use Illuminate\Support\Sleep;
 use SocialPoster\Enums\FailureReason;
 use SocialPoster\Enums\Platform;
 use SocialPoster\Events\PostFailed;
+use SocialPoster\Events\PostProcessing;
 use SocialPoster\Events\PostPublished;
 use SocialPoster\Jobs\PublishToConnectionJob;
 use SocialPoster\Platforms\TikTok\TikTokOptions;
@@ -208,6 +209,10 @@ it('reports a post TikTok says FAILED as not published, so it can be dispatched 
     Event::listen(PostFailed::class, function (PostFailed $event) use ($failures) {
         $failures[] = $event;
     });
+    $waits = new ArrayObject;
+    Event::listen(PostProcessing::class, function (PostProcessing $event) use ($waits) {
+        $waits[] = $event;
+    });
 
     Http::fake([
         API.'/post/publish/creator_info/query/' => Http::response(ttjOk([
@@ -238,7 +243,12 @@ it('reports a post TikTok says FAILED as not published, so it can be dispatched 
 
     expect($failures)->toHaveCount(1)
         ->and($failures[0]->possiblyPublished)->toBeFalse()
-        ->and($inits)->toHaveCount($expectedInits);
+        ->and($failures[0]->exception->context['identifiers'])->toBe(['publish_id' => 'v_pub_url~v2.7301234567890123457'])
+        ->and($inits)->toHaveCount($expectedInits)
+        // Every wait after an init names its publish_id, the key of TikTok's webhooks.
+        ->and($waits)->not->toBeEmpty()
+        ->and(array_unique(array_map(fn (PostProcessing $event) => $event->identifiers['publish_id'] ?? null, $waits->getArrayCopy())))
+        ->toBe(['v_pub_url~v2.7301234567890123457']);
 
     // The same post again is not refused as "may be live".
     dispatch($job());

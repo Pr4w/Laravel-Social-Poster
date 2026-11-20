@@ -161,6 +161,15 @@ class CommentingScriptedDriver extends ScriptedDriver implements SupportsFirstCo
     }
 }
 
+/** Reports state['container_id'] as the platform id it already gave. */
+class IdentifyingScriptedDriver extends ScriptedDriver
+{
+    public function identifiersOf(array $state): array
+    {
+        return is_string($state['container_id'] ?? null) ? ['container_id' => $state['container_id'], 'blank' => ''] : [];
+    }
+}
+
 /** Counts cleanup() calls. */
 class CountingTransformer implements MediaTransformer
 {
@@ -1493,6 +1502,88 @@ it('reports every wait as PostProcessing with its reason, but not the hop into a
     ])
         ->and(array_map(fn (PostProcessing $event) => $event->poll, eventsOf($events, PostProcessing::class)))->toBe([1, 3, 4, 5])
         ->and(eventsOf($events, PostPublished::class))->toHaveCount(1);
+});
+
+it('hands the app the ids the platform already gave, on every wait and on the failure', function () {
+    useDriver(IdentifyingScriptedDriver::class);
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        PublishOutcome::pending(['phase' => 'upload'], 0),
+        PublishOutcome::pending(['phase' => 'await', 'container_id' => 'c-1'], 30),
+        PublishOutcome::pending(['phase' => 'await', 'container_id' => 'c-1'], 30),
+        new PermanentException('Rejected.', Platform::Facebook, FailureReason::MediaRejected),
+    ];
+
+    push(publishJob());
+    work();
+
+    $failed = eventsOf($events, PostFailed::class);
+
+    expect(array_map(fn (PostProcessing $event) => $event->identifiers, eventsOf($events, PostProcessing::class)))->toBe([
+        [],
+        ['container_id' => 'c-1'],
+        ['container_id' => 'c-1'],
+    ])
+        ->and($failed)->toHaveCount(1)
+        ->and($failed[0]->exception->context['identifiers'])->toBe(['container_id' => 'c-1']);
+});
+
+it('names the ids from the failure itself when the run that got them fails, and when the worker gives up', function () {
+    useDriver(IdentifyingScriptedDriver::class);
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        new PermanentException('Rejected after the create.', Platform::Facebook, FailureReason::MediaRejected, ['container_id' => 'c-2']),
+    ];
+
+    push(publishJob());
+    work();
+
+    publishJob(['phase' => 'await', 'container_id' => 'c-3'], 2, 'key-2')
+        ->failed(new TimeoutExceededException('PublishToConnectionJob has timed out.'));
+
+    $failed = eventsOf($events, PostFailed::class);
+
+    expect($failed)->toHaveCount(2)
+        ->and($failed[0]->exception->context['identifiers'])->toBe(['container_id' => 'c-2'])
+        ->and($failed[1]->exception->context['identifiers'])->toBe(['container_id' => 'c-3']);
+});
+
+it('leaves the identifiers out when the driver has none', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        PublishOutcome::pending(['phase' => 'await', 'container_id' => 'c-1'], 30),
+        new PermanentException('Rejected.', Platform::Facebook, FailureReason::MediaRejected),
+    ];
+
+    push(publishJob());
+    work();
+
+    expect(eventsOf($events, PostProcessing::class)[0]->identifiers)->toBe([])
+        ->and(eventsOf($events, PostFailed::class)[0]->exception->context)->not->toHaveKey('identifiers');
+});
+
+it('restores a PostProcessing queued before reason and identifiers existed with their defaults', function () {
+    $event = (new \ReflectionClass(PostProcessing::class))->newInstanceWithoutConstructor();
+    $event->__unserialize([
+        'platform' => Platform::TikTok,
+        'poll' => 2,
+        'elapsedSeconds' => 40,
+        'metadata' => ['record' => 7],
+        'correlationId' => 'corr-1',
+    ]);
+
+    expect($event->poll)->toBe(2)
+        ->and($event->metadata)->toBe(['record' => 7])
+        ->and($event->reason)->toBeNull()
+        ->and($event->identifiers)->toBe([]);
+
+    $copy = unserialize(serialize(new PostProcessing(Platform::TikTok, 1, 5, [], null, PostProcessing::REASON_PROCESSING, ['publish_id' => 'p-1'])));
+
+    expect($copy->identifiers)->toBe(['publish_id' => 'p-1']);
 });
 
 it('keeps the wait reason on a Pending rebuilt with another state', function () {

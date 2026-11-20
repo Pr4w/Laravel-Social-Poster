@@ -1622,6 +1622,20 @@ class TikTokDriver extends AbstractPlatform
     }
 
     /**
+     * The publish_id once the init answered: the key of TikTok's
+     * post.publish.* webhooks, known long before the publish ends.
+     *
+     * @param  array<string, mixed>  $state
+     * @return array<string, string>
+     */
+    public function identifiersOf(array $state): array
+    {
+        $publishId = $state['publish_id'] ?? null;
+
+        return is_scalar($publishId) && trim((string) $publishId) !== '' ? ['publish_id' => trim((string) $publishId)] : [];
+    }
+
+    /**
      * Hand the init to its own commit step.
      *
      * @param  array<string, mixed>  $state

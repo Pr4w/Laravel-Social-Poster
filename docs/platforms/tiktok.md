@@ -490,6 +490,13 @@ spending a retry (TikTok allows 30 status reads a minute per token).
 - A `processing` result is final: the post is live, the chain ends with `PostPublished`, and the video
   id arrives later through the `post.publish.publicly_available` webhook (match the `publish_id`).
 
+**Matching webhooks before the publish ends.** TikTok's `post.publish.*` webhooks can arrive while
+the chain is still running. From the first wait after the init, every `PostProcessing` carries
+`identifiers = ['publish_id' => …]`, and a `PostFailed` after the init has the same array in
+`exception->context['identifiers']`. Store it on your record as soon as it arrives, so a webhook can
+be matched to a publish in progress. A restart (a new init) gives a new `publish_id`: the next
+`PostProcessing` carries it.
+
 Payload keys: `status`, `publish_id` (always), `post_id` (the video id or `null`), and when they apply
 `privacy`, `privacy_requested`, `privacy_fallback_used`, `transfer` (`PULL_FROM_URL` or
 `FILE_UPLOAD`), `fallback`, `thumbnail_warning`, `caption_ignored`, `public_id_pending`,
