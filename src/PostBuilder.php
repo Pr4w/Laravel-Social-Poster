@@ -1175,6 +1175,8 @@ class PostBuilder
         $committingSince = null;
         $deadline = null;
         $restarts = 0;
+        // Retries of this publish so far (PostRetrying), across steps and restarts.
+        $retried = 0;
         $attempt = 1;
         $polls = 0;
         $reresolved = false;
@@ -1195,11 +1197,15 @@ class PostBuilder
             $deadline = is_numeric($stored['_deadline'] ?? null) ? (int) $stored['_deadline'] : null;
             $startedAt = is_numeric($stored[Pending::STARTED_AT] ?? null) ? (int) $stored[Pending::STARTED_AT] : $startedAt;
             $restarts = max(0, (int) ($stored[Pending::RESTARTS] ?? 0));
+            $retried = max(0, (int) ($stored['_retries'] ?? 0));
             $recovering = $recorded['committing'];
             $committingSince = $recorded['since'];
         }
 
         while (true) {
+            // announce() and failNow() report them.
+            $this->runs[$value]['retried'] = $retried;
+            $this->runs[$value]['restarts'] = $restarts;
             $leased = $this->runs[$value]['store'];
 
             if ($renew && $leased instanceof AtomicIdempotencyStore && ! $this->renewClaim($leased, $key, $owner, $platform)) {
@@ -1226,7 +1232,7 @@ class PostBuilder
                     // Before a create: a repeat of this step (crash, redelivery
                     // after a hand-off) then knows to verify first.
                     $committingSince ??= $this->now();
-                    $committingState = $this->storedState($state, true, $committed, $deadline, $startedAt, $restarts);
+                    $committingState = $this->storedState($state, true, $committed, $deadline, $startedAt, $restarts, $retried + 1);
                     $this->storeCall($value, fn (AtomicIdempotencyStore $store) => $store->markCommitting($key, $committingState));
                 }
 
@@ -1249,7 +1255,7 @@ class PostBuilder
                     ? $e->possiblyPublished()
                     : ($committed || ($commitPhase && ($recovering || $commitSent)));
 
-                return $this->failNow($e, $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts));
+                return $this->failNow($e, $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts, $retried));
             } catch (Throwable $e) {
                 if ($e instanceof \Error || $e instanceof LogicException) {
                     $possibly = $committed || ($sent && $commitPhase);
@@ -1262,7 +1268,7 @@ class PostBuilder
                         $possibly ? FailureReason::OutcomeUnknown : FailureReason::Unknown,
                         ['unexpected' => true, 'exception' => $e::class],
                         $e,
-                    ), $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts));
+                    ), $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts, $retried));
                 }
 
                 $error = new TemporaryException(
@@ -1289,7 +1295,7 @@ class PostBuilder
                             FailureReason::OutcomeUnknown,
                             ['possibly_published' => true, 'restart_refused' => true] + array_diff_key($error->context, ['restart' => true]),
                             $error,
-                        ), $post, $attempt, true, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts));
+                        ), $post, $attempt, true, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts, $retried));
                     }
 
                     // The platform discarded the upload: start over from publish().
@@ -1309,11 +1315,24 @@ class PostBuilder
                         return $this->failNow($error, $post, $attempt, $committed);
                     }
 
+                    $this->safeDispatch(new PostRetrying(
+                        $platform,
+                        $error->errorSummary(),
+                        $attempt,
+                        now()->addSeconds($delay),
+                        $post->metadata(),
+                        $correlationId,
+                        ++$retried,
+                        $restarts,
+                    ));
+
                     $state = null;
                     $commits = $committed = $recovering = $commitSent = false;
                     $committingSince = $deadline = null;
                     $attempt = 1;
+                    $polls = 0;
                     $this->sleep($delay);
+                    $startedAt = $this->now();
 
                     continue;
                 }
@@ -1342,7 +1361,7 @@ class PostBuilder
                         ? $error->possiblyPublished()
                         : ($committed || ($commitPhase && ($recovering || $commitSent)));
 
-                    return $this->failNow($error, $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts));
+                    return $this->failNow($error, $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts, $retried));
                 }
 
                 $this->safeDispatch(new PostRetrying(
@@ -1352,6 +1371,8 @@ class PostBuilder
                     now()->addSeconds($delay),
                     $post->metadata(),
                     $correlationId,
+                    ++$retried,
+                    $restarts,
                 ));
 
                 $attempt++;
@@ -1376,7 +1397,7 @@ class PostBuilder
                     FailureReason::Unknown,
                     ['outcome' => get_debug_type($outcome)] + ($possibly ? ['possibly_published' => true] : []),
                     new LogicException('Unknown PublishOutcome '.get_debug_type($outcome)),
-                ), $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts));
+                ), $post, $attempt, $possibly, $this->storedStateOrNull($state, $commits, $committed, $deadline, $startedAt, $restarts, $retried));
             }
 
             $committed = $committed || $outcome->committed;
@@ -1406,19 +1427,17 @@ class PostBuilder
             $grace = $wait === 0 && $graceable && ($late || $over);
 
             if (! $grace && ($late || $over)) {
-                return $this->handOff($post, $state, $polls, $wait, $commits, $committed, $deadline, $startedAt, $restarts, $sentCommit);
+                return $this->handOff($post, $state, $polls, $wait, $commits, $committed, $deadline, $startedAt, $restarts, $sentCommit, $retried, $outcome->reason);
             }
 
             // Record the step, as the job does before each continuation: a
             // same-key dispatch that takes the key over once this process is
             // gone (a crash, a stall past the lease) resumes here instead of
             // publishing a second time. Same markers as the job's own record.
-            $recordedStep = $this->storedState($state, $commits, $committed, $deadline, $startedAt, $restarts) + ['_step' => $polls, '_chain' => $owner];
+            $recordedStep = $this->storedState($state, $commits, $committed, $deadline, $startedAt, $restarts, $retried) + ['_step' => $polls, '_chain' => $owner];
             $this->storeCall($value, fn (IdempotencyStore $store) => $store->markPending($key, $recordedStep), false);
 
-            if (! $commits) {
-                $this->safeDispatch(new PostProcessing($platform, $polls, $now - $startedAt, $post->metadata(), $correlationId));
-            }
+            $this->announceWait($post, $driver, $state, $polls, $now - $startedAt, $wait, $commits, $sentCommit, $outcome->reason);
 
             $this->sleep($wait);
         }
@@ -1435,12 +1454,13 @@ class PostBuilder
      *
      * @param  array<string, mixed>  $state
      */
-    protected function handOff(PreparedPost $post, array $state, int $polls, int $wait, bool $commits, bool $committed, ?int $deadline, int $startedAt, int $restarts, bool $possiblySent = false): PostResult
+    protected function handOff(PreparedPost $post, array $state, int $polls, int $wait, bool $commits, bool $committed, ?int $deadline, int $startedAt, int $restarts, bool $possiblySent = false, int $retries = 0, ?string $reason = null): PostResult
     {
         $platform = $post->platform;
         $run = $this->runs[$platform->value];
         $now = $this->now();
-        $stored = $this->storedState($state, $commits, $committed, $deadline, $startedAt, $restarts);
+        $announced = $wait;
+        $stored = $this->storedState($state, $commits, $committed, $deadline, $startedAt, $restarts, $retries);
 
         if (($deadline !== null && $now >= $deadline) || $this->isSyncConnection()) {
             $context = [
@@ -1482,6 +1502,7 @@ class PostBuilder
         $job->deadline = $deadline;
         $job->startedAt = $startedAt;
         $job->restarts = $restarts;
+        $job->priorRetries = $retries;
         $job->commitSent = $possiblySent;
 
         if ($committed || $possiblySent) {
@@ -1518,9 +1539,8 @@ class PostBuilder
             return $this->failNow($error, $post, 1, $committed || $possiblySent, $stored);
         }
 
-        if (! $commits) {
-            $this->safeDispatch(new PostProcessing($platform, $polls, $now - $startedAt, $post->metadata(), $run['correlation_id']));
-        }
+        // The wait handed to the queue, announced as the job announces its own.
+        $this->announceWait($post, $run['driver'] ?? null, $state, $polls, $now - $startedAt, $announced, $commits, $possiblySent, $reason);
 
         return $this->processingResult($post, ['handed_off' => true, 'polls' => $polls]);
     }
@@ -1562,7 +1582,7 @@ class PostBuilder
         $this->releaseLease($post->platform->value);
 
         $result = $result->withMetadata($post->metadata());
-        $this->safeDispatch(new PostPublished($result, $run['correlation_id'], $run['key'], $attempt, $replayed));
+        $this->safeDispatch(new PostPublished($result, $run['correlation_id'], $run['key'], $attempt, $replayed, (int) ($run['retried'] ?? 0), (int) ($run['restarts'] ?? 0)));
 
         return $result;
     }
@@ -1579,6 +1599,11 @@ class PostBuilder
     {
         $platform = $post->platform;
         $run = $this->runs[$platform->value] ?? null;
+        $identifiers = $this->identifiersOf($run['driver'] ?? null, $storedState ?? []) + $this->identifiersOf($run['driver'] ?? null, $e->context);
+
+        if ($identifiers !== []) {
+            $e->addContext(['identifiers' => $identifiers]);
+        }
 
         if ($possiblyPublished) {
             $e->withFlags(['possibly_published' => true]);
@@ -1601,6 +1626,8 @@ class PostBuilder
             $attempt,
             false,
             $possiblyPublished,
+            (int) ($run['retried'] ?? 0),
+            (int) ($run['restarts'] ?? 0),
         ));
 
         if ($e instanceof PermanentException && $e->needsReconnect()) {
@@ -2101,7 +2128,7 @@ class PostBuilder
      * @param  array<string, mixed>  $state
      * @return array<string, mixed>
      */
-    protected function storedState(array $state, bool $commits, bool $committed, ?int $deadline, int $startedAt, int $restarts): array
+    protected function storedState(array $state, bool $commits, bool $committed, ?int $deadline, int $startedAt, int $restarts, int $retries = 0): array
     {
         return Pending::withoutReservedKeys($state) + array_filter([
             '_commits' => $commits ?: null,
@@ -2109,16 +2136,73 @@ class PostBuilder
             '_deadline' => $deadline,
             Pending::STARTED_AT => $startedAt,
             Pending::RESTARTS => $restarts ?: null,
+            '_retries' => $retries ?: null,
         ], static fn ($value) => $value !== null);
+    }
+
+    /**
+     * PostProcessing for a wait, as the job reports it (scheduleContinuation()):
+     * every wait, a create step's too, but not the immediate hop into a
+     * create; with the driver's reason, else 'verifying' for a verify step
+     * after an ambiguous create, else 'processing' outside a create step; and
+     * the ids the platform already gave.
+     *
+     * @param  array<string, mixed>  $state
+     */
+    protected function announceWait(PreparedPost $post, mixed $driver, array $state, int $polls, int $elapsed, int $wait, bool $commits, bool $sentCommit, ?string $reason): void
+    {
+        if ($commits && $wait <= 0) {
+            return;
+        }
+
+        $this->safeDispatch(new PostProcessing(
+            $post->platform,
+            $polls,
+            $elapsed,
+            $post->metadata(),
+            $this->runs[$post->platform->value]['correlation_id'] ?? null,
+            $reason ?? match (true) {
+                $sentCommit => PostProcessing::REASON_VERIFYING,
+                ! $commits => PostProcessing::REASON_PROCESSING,
+                default => null,
+            },
+            $this->identifiersOf($driver, $state),
+        ));
+    }
+
+    /**
+     * The ids the platform already gave (AbstractPlatform::identifiersOf()), as
+     * the job reports them on PostProcessing: non-empty strings only.
+     *
+     * @param  array<string, mixed>  $state
+     * @return array<string, string>
+     */
+    protected function identifiersOf(mixed $driver, array $state): array
+    {
+        if (! $driver instanceof AbstractPlatform) {
+            return [];
+        }
+
+        try {
+            $identifiers = $driver->identifiersOf(Pending::withoutReservedKeys($state));
+        } catch (Throwable) {
+            return [];
+        }
+
+        return array_filter(
+            $identifiers,
+            static fn ($value, $key) => is_string($key) && is_string($value) && $value !== '',
+            ARRAY_FILTER_USE_BOTH,
+        );
     }
 
     /**
      * @param  array<string, mixed>|null  $state
      * @return array<string, mixed>|null
      */
-    protected function storedStateOrNull(?array $state, bool $commits, bool $committed, ?int $deadline, int $startedAt, int $restarts): ?array
+    protected function storedStateOrNull(?array $state, bool $commits, bool $committed, ?int $deadline, int $startedAt, int $restarts, int $retries = 0): ?array
     {
-        return $state === null ? null : $this->storedState($state, $commits, $committed, $deadline, $startedAt, $restarts);
+        return $state === null ? null : $this->storedState($state, $commits, $committed, $deadline, $startedAt, $restarts, $retries);
     }
 
     /**

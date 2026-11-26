@@ -677,7 +677,8 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
         $state['poll_errors'] = 0;
 
         if ($stillPending !== []) {
-            return $this->again($state, $this->pollInterval(), false, PostProcessing::REASON_PROCESSING);
+            // Children re-created in this run (failed on Meta's side, or expired) make the wait a retry.
+            return $this->again($state, $this->pollInterval(), false, $failed !== [] ? PostProcessing::REASON_RETRYING : PostProcessing::REASON_PROCESSING);
         }
 
         $params = ['media_type' => 'CAROUSEL', 'children' => implode(',', $children)];
@@ -1155,7 +1156,7 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
     protected function restart(PreparedPost $post, array $state): PublishOutcome
     {
         if (($state['phase'] ?? null) === 'publish') {
-            return $this->again(['phase' => 'restart'] + $state, 0);
+            return $this->again(['phase' => 'restart'] + $state, 0, false, PostProcessing::REASON_RETRYING);
         }
 
         $outcome = $this->publish($post);
@@ -1170,7 +1171,8 @@ class InstagramDriver extends AbstractPlatform implements SupportsComments, Supp
             $carry['since'] = min((int) $state['since'], (int) $outcome->state['since']);
         }
 
-        return $outcome->withState(array_replace($outcome->state, $carry));
+        // The container failed (a Meta-side error) or expired: the new ones are a retry, not a first processing wait.
+        return $outcome->withState(array_replace($outcome->state, $carry))->withReason(PostProcessing::REASON_RETRYING);
     }
 
     /**

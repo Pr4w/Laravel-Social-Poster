@@ -26,9 +26,12 @@ class PostFailed
      * @param  array<string, mixed>  $metadata  Caller correlation data from ->withMetadata().
      * @param  ?string  $correlationId  The id returned by post() / passed to ->correlationId(), shared by a fan-out.
      * @param  ?string  $idempotencyKey  The per-platform, per-account key the store records this publish under.
-     * @param  int  $attempt  Queue attempt (1-based) of the run that failed.
+     * @param  int  $attempt  Attempt (1-based) of the step that failed; use $retries for the publish.
      * @param  bool  $willRetry  True when the job will run again after this event.
      * @param  bool  $possiblyPublished  True when the post may exist on the platform despite the failure.
+     * @param  int  $retries  Retries before this failure, across the publish's steps and restarts (the
+     *                        PostRetrying events it fired, plus any run the queue redelivered): it failed on attempt $retries + 1.
+     * @param  int  $restarts  Times the publish started over from scratch.
      */
     public function __construct(
         public readonly Platform $platform,
@@ -39,6 +42,8 @@ class PostFailed
         public readonly int $attempt = 1,
         public readonly bool $willRetry = false,
         public readonly bool $possiblyPublished = false,
+        public readonly int $retries = 0,
+        public readonly int $restarts = 0,
     ) {}
 
     /**

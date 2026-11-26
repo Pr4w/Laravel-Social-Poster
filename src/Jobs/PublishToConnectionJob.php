@@ -57,6 +57,7 @@ use SocialPoster\ValueObjects\PreparedPost;
 use SocialPoster\ValueObjects\Published;
 use SocialPoster\ValueObjects\SocialPost;
 use Throwable;
+use WeakMap;
 
 /**
  * Drives one platform's publish to completion. The first run validates (unless
@@ -166,6 +167,23 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
 
     /** Earlier failed tries of this step that were re-dispatched (commit phases). */
     public int $retries = 0;
+
+    /**
+     * Retries of the publish before this step: the PostRetrying events of its
+     * earlier steps and restarts, plus their runs the queue redelivered. With
+     * this step's own earlier attempts it gives retriesSoFar(), reported on
+     * PostRetrying, PostPublished and PostFailed.
+     */
+    public int $priorRetries = 0;
+
+    /**
+     * The counts a run reported its failure with, keyed by the exception it
+     * failed the job with: Laravel calls failed() on a copy unserialised from
+     * the payload, which lacks what the run restored from the store.
+     *
+     * @var WeakMap<Throwable, array{0: int, 1: int}>|null
+     */
+    protected static ?WeakMap $failureCounts = null;
 
     /** An earlier try of this commit phase may have created the post. */
     public bool $recovering = false;
@@ -614,7 +632,8 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
 
             if ($this->run['commit']) {
                 $this->committingSince ??= $this->now();
-                $atomic?->markCommitting($key, $this->storedState($state, true, $this->committed, $this->deadline));
+                // A dispatch that takes over after this run is lost counts it as a retry.
+                $atomic?->markCommitting($key, $this->storedState($state, true, $this->committed, $this->deadline, null, $this->retriesSoFar() + 1));
             }
 
             $this->startedAt ??= $this->now();
@@ -895,11 +914,17 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
      * whether the step commits, whether the post exists, its clock, and which
      * step of which chain wrote it.
      *
+     * The retry count is kept twice: '_retries', the publish's count for a
+     * dispatch that takes the chain over (its own attempts start at 1), and
+     * '_retries_base', this payload's priorRetries, for a later delivery of
+     * this same payload, whose attempts already count the earlier ones.
+     *
      * @param  array<string, mixed>  $state
      * @param  ?int  $step  The poll number of the step the state is for (default: this run's).
+     * @param  ?int  $retries  The count for a takeover (default: retriesAfterThisRun()).
      * @return array<string, mixed>
      */
-    protected function storedState(array $state, bool $commits, bool $committed, ?int $deadline, ?int $step = null): array
+    protected function storedState(array $state, bool $commits, bool $committed, ?int $deadline, ?int $step = null, ?int $retries = null): array
     {
         return Pending::withoutReservedKeys($state) + array_filter([
             '_commits' => $commits ?: null,
@@ -907,6 +932,8 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
             '_deadline' => $deadline,
             Pending::STARTED_AT => $this->startedAt,
             Pending::RESTARTS => $this->restarts ?: null,
+            '_retries' => ($retries ?? $this->retriesAfterThisRun()) ?: null,
+            '_retries_base' => $this->priorRetries ?: null,
             '_step' => $step ?? $this->pollCount,
             '_chain' => $this->ownerToken(),
         ], static fn ($value) => $value !== null);
@@ -938,9 +965,28 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
         $this->committed = $this->committed || (bool) ($stored['_committed'] ?? false);
         $this->deadline ??= is_numeric($stored['_deadline'] ?? null) ? (int) $stored['_deadline'] : null;
         $this->startedAt ??= is_numeric($stored[Pending::STARTED_AT] ?? null) ? (int) $stored[Pending::STARTED_AT] : null;
-        $this->restarts = max($this->restarts, (int) ($stored[Pending::RESTARTS] ?? 0));
+        $this->restoreCounts($stored);
 
         return Pending::withoutReservedKeys($stored);
+    }
+
+    /**
+     * The restarts and retries a stored state records. A row this payload's own
+     * earlier delivery wrote (same chain token) gives back only what came before
+     * that payload, since this delivery's attempts already count the earlier
+     * ones; a row another dispatch wrote gives the publish's whole count.
+     *
+     * @param  array<string, mixed>  $stored
+     */
+    protected function restoreCounts(array $stored): void
+    {
+        $this->restarts = max($this->restarts, (int) ($stored[Pending::RESTARTS] ?? 0));
+
+        $retries = ($stored['_chain'] ?? null) === $this->ownerToken()
+            ? $stored['_retries_base'] ?? 0
+            : $stored['_retries'] ?? 0;
+
+        $this->priorRetries = max($this->priorRetries, is_numeric($retries) ? (int) $retries : 0);
     }
 
     protected function assertNotExpired(): void
@@ -993,7 +1039,7 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
 
         $result = $result->withMetadata($this->post->metadata);
 
-        $this->safeDispatch(new PostPublished($result, $this->correlationId, $key, $this->attemptNumber(), $replayed));
+        $this->safeDispatch(new PostPublished($result, $this->correlationId, $key, $this->attemptNumber(), $replayed, $this->retriesSoFar(), $this->restarts));
 
         try {
             $this->dispatchComment($driver, $result);
@@ -1267,13 +1313,15 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
             ? min(max(0, $e->retryAfter), static::MAX_RETRY_DELAY)
             : $this->backoffFor($attempt);
 
-        $this->safeDispatch(new PostRetrying(
+        $this->retrying(new PostRetrying(
             $this->platform,
             $e->errorSummary(),
             $attempt,
             now()->addSeconds($delay),
             $this->post->metadata,
             $this->correlationId,
+            $this->retriesSoFar() + 1,
+            $this->restarts,
         ));
 
         $state = $this->run['state'] ?? null;
@@ -1353,13 +1401,15 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
             $this->reportQuietly($inner);
         }
 
-        $this->safeDispatch(new PostRetrying(
+        $this->retrying(new PostRetrying(
             $this->platform,
             $e->errorSummary(),
             $this->attemptNumber(),
             now()->addSeconds(max(0, $e->retryAfter ?? 0)),
             $this->post->metadata,
             $this->correlationId,
+            $this->retriesSoFar() + 1,
+            $restarts,
         ));
 
         $this->dispatchNext($this->replicate([
@@ -1518,6 +1568,9 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
             $this->run['failed'] = true;
         }
 
+        static::$failureCounts ??= new WeakMap;
+        static::$failureCounts[$e] = [$this->retriesSoFar(), $this->restarts];
+
         if ($this->job !== null && ! $this->job instanceof FakeJob) {
             $this->fail($e);
 
@@ -1549,11 +1602,14 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
 
             if ($e instanceof SocialPosterException) {
                 $exception = $e;
+                [$retries, $restarts] = $this->failureCounts($e, $store, $key);
             } else {
                 if ($this->publishedInStore($store, $key) || $this->stepHandedOver()) {
                     return;
                 }
 
+                // Before wrapUnexpectedFailure(), which may forget the record.
+                [$retries, $restarts] = $this->failureCounts($e, $store, $key);
                 $exception = $this->wrapUnexpectedFailure($e, $store, $key);
             }
 
@@ -1568,6 +1624,8 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
                 $this->attemptNumber(),
                 false,
                 $exception->possiblyPublished(),
+                $retries,
+                $restarts,
             ), $events);
 
             if ($exception instanceof PermanentException && $exception->needsReconnect()) {
@@ -1583,6 +1641,44 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
         } catch (Throwable $inner) {
             $this->reportQuietly($inner);
         }
+    }
+
+    /**
+     * The retries and restarts a failure reports. What the failing run counted
+     * when it failed the job (failJob()), since failed() runs on a copy of the
+     * payload. Else (the worker gave up on the job) this payload's own count,
+     * completed by the store's row of the step for a job that started from the
+     * store; and a delivery the worker failed without running it
+     * (MaxAttemptsExceededException, not a timeout) is not a retry.
+     *
+     * @return array{0: int, 1: int}
+     */
+    protected function failureCounts(?Throwable $e, ?IdempotencyStore $store, string $key): array
+    {
+        if ($e !== null && static::$failureCounts !== null && isset(static::$failureCounts[$e])) {
+            return static::$failureCounts[$e];
+        }
+
+        if ($this->state === null && $store !== null) {
+            try {
+                $row = $store instanceof AtomicIdempotencyStore ? $store->committing($key) : null;
+                $stored = $row['state'] ?? $store->pendingState($key);
+
+                if (is_array($stored)) {
+                    $this->restoreCounts($stored);
+                }
+            } catch (Throwable $inner) {
+                $this->reportQuietly($inner);
+            }
+        }
+
+        $retries = $this->retriesSoFar();
+
+        if ($e !== null && is_a($e, 'Illuminate\Queue\MaxAttemptsExceededException') && ! is_a($e, 'Illuminate\Queue\TimeoutExceededException')) {
+            $retries = max(0, $retries - 1);
+        }
+
+        return [$retries, $this->restarts];
     }
 
     /** Whether the store records the key as published; false when it cannot tell. */
@@ -1834,6 +1930,7 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
     protected function replicate(array $overrides = []): static
     {
         $o = $overrides + [
+            'priorRetries' => null,
             'skipValidation' => true,
             'state' => $this->run['state'] ?? $this->state,
             'pollCount' => $this->pollCount,
@@ -1875,6 +1972,11 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
         $next->notBefore = null;
         $next->maxPolls = $this->maxPolls;
         $next->failOnTimeout = ! $this->retriesKilledRun($next->state);
+        // The next step's own earlier attempts are its 'retries' (a re-dispatched
+        // commit try); everything before them is carried as priorRetries.
+        $next->priorRetries = is_int($o['priorRetries'])
+            ? $o['priorRetries']
+            : max(0, $this->retriesAfterThisRun() - (int) $o['retries']);
 
         $this->propagateQueue($next);
 
@@ -2067,6 +2169,32 @@ class PublishToConnectionJob implements ShouldBeUniqueUntilProcessing, ShouldQue
     protected function attemptNumber(): int
     {
         return $this->retries + max(1, (int) $this->attempts());
+    }
+
+    /**
+     * Retries of the publish before this run: the earlier steps' and restarts'
+     * (priorRetries), plus this step's earlier attempts (a released retry, a
+     * re-dispatched commit try, or the rare redelivery of a run the worker lost).
+     */
+    protected function retriesSoFar(): int
+    {
+        return $this->priorRetries + $this->attemptNumber() - 1;
+    }
+
+    /** retriesSoFar(), plus the retry this run announced, if any: what the next step starts from. */
+    protected function retriesAfterThisRun(): int
+    {
+        return $this->retriesSoFar() + (is_array($this->run) && ($this->run['retried'] ?? false) ? 1 : 0);
+    }
+
+    /** Announce a retry (or restart) of the publish, once per run. */
+    protected function retrying(PostRetrying $event): void
+    {
+        if (is_array($this->run)) {
+            $this->run['retried'] = true;
+        }
+
+        $this->safeDispatch($event);
     }
 
     /** @return Lock|false|null A held lock, false when another run holds it, null when locks are unavailable. */

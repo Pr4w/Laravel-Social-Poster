@@ -25,7 +25,11 @@ class PostProcessing
     /** An earlier publish lost its answer: the next run checks the platform before publishing again. */
     public const REASON_VERIFYING = 'verifying';
 
-    /** The platform refused the publish for now (a throttle, a transient error): it is retried. */
+    /**
+     * The publish is trying again inside the driver: the platform refused it for now (a throttle, a
+     * transient error), or the driver re-creates media the platform failed to process or let expire
+     * (Instagram containers). Not a job retry: PostRetrying is not fired for it.
+     */
     public const REASON_RETRYING = 'retrying';
 
     /**

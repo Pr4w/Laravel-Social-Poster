@@ -756,13 +756,27 @@ an event queued by an older release unserialises with the new properties at thei
 | `PostQueued` | A publish job was accepted by the queue | `platform`, `post`, `metadata`, `correlationId`, `idempotencyKey` |
 | `PostDeduplicated` | A dispatch was dropped because the same key is already queued or running, or a redelivered copy of a finished step was dropped | `platform`, `key`, `metadata`, `correlationId` |
 | `PostProcessing` | Each wait of a continuation, a create step's included (not the immediate hop into a create) | `platform`, `poll`, `elapsedSeconds`, `metadata`, `correlationId`, `reason` (`processing`, `not_ready`, `verifying`, `retrying`, or null), `identifiers` (ids the platform already gave, e.g. TikTok's `publish_id`; empty when none yet) |
-| `PostRetrying` | A transient failure; the job will try again | `platform`, `errorSummary`, `attempt`, `nextRetryAt`, `metadata`, `correlationId`; `reason()` |
-| `PostPublished` | The post exists (also scheduled, draft, private or processing: check `$result->state`) | `result`, `correlationId`, `idempotencyKey`, `attempt`, `replayed` |
-| `PostFailed` | Publishing failed for good | `platform`, `exception` (`context['identifiers']` when the platform already gave ids), `metadata`, `correlationId`, `idempotencyKey`, `attempt`, `willRetry`, `possiblyPublished`; `errorSummary()` |
+| `PostRetrying` | A transient failure, or a restart from scratch; the publish will try again (queued or `postNow()`) | `platform`, `errorSummary`, `attempt`, `nextRetryAt`, `metadata`, `correlationId`, `retries`, `restarts`; `reason()` |
+| `PostPublished` | The post exists (also scheduled, draft, private or processing: check `$result->state`) | `result`, `correlationId`, `idempotencyKey`, `attempt`, `replayed`, `retries`, `restarts` |
+| `PostFailed` | Publishing failed for good | `platform`, `exception` (`context['identifiers']` when the platform already gave ids), `metadata`, `correlationId`, `idempotencyKey`, `attempt`, `willRetry`, `possiblyPublished`, `retries`, `restarts`; `errorSummary()` |
 | `CredentialsRejected` | A failure that needs a reconnect | `platform`, `accountKey`, `reason`, `terminal`, `metadata`, `errorSummary` |
 | `CommentPublished` | The first comment was added (or found already there) | `platform`, `postId`, `commentId`, `metadata`, `url`, `payload` |
 | `CommentFailed` | The first comment could not be added after its retries | `platform`, `postId`, `exception`, `metadata`, `attempt`; `errorSummary()` |
 | `CommentSkipped` | A first comment was requested but deliberately not attempted | `platform`, `postId`, `reason`, `metadata` |
+
+**Counting attempts.** A publish runs as several steps (upload, processing waits, the create), and
+`attempt` is the attempt of the current step: it starts at 1 again on every step. For the publish as a
+whole, use `retries`: the retries so far across all steps and restarts (on `PostRetrying` it includes
+that retry). A post published or failed with `retries = 2` did so on its third attempt. Besides the
+`PostRetrying` events, a run the queue delivered again counts too: one whose worker died or timed out,
+and one held back because another run had the step. A delivery the worker failed without running it
+does not. A dispatch that takes over a stopped publish (a re-dispatch with the same key, `reconcile()`)
+continues its count from the store. `restarts` counts the times the publish started over from scratch,
+each of which is also a retry: a TikTok publish the platform discarded, LinkedIn upload URLs that
+expired, a Bluesky blob that is gone, a file that changed during an X upload, an Instagram container
+gone outside the publish step. Waits a driver handles by itself (media not ready, a verification, a
+throttled create, Instagram containers it re-creates) are neither: they are `PostProcessing` events
+with a `reason`. A replayed `PostPublished` counts the run that replayed, not the original publish.
 
 **Make listeners idempotent.** `PostPublished` can fire more than once for one post: a replay after a
 worker crash or a redelivery, a second dispatch of a published key, and every `reconcile()` replay

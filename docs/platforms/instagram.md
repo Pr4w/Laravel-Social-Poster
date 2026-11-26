@@ -406,7 +406,8 @@ Container failures carry `possibly_published = false`: such a container was neve
 What each `Pending` means:
 
 - **Processing waits** (`await_*`) and the **`restart` hop** are plain `Pending`s. The job fires
-  `PostProcessing` for each of them (`reason` `processing`).
+  `PostProcessing` for each of them: `reason` `processing`, or `retrying` for the `restart` hop and the
+  first wait after containers were re-created (below).
 - **The `publish` phase** is a commit `Pending` (`commits = true`): the next run calls `media_publish`, the
   only call that creates a post. The hop into it fires no event. The rounds that stay in that phase are
   commit `Pending`s too, and each fires `PostProcessing` with its `reason`: `not_ready` (2207027, on
@@ -415,7 +416,11 @@ What each `Pending` means:
 - Re-creating containers from the `publish` phase runs on a hop of its own (`restart`, recheck 0), outside
   the commit. That is one extra queue hop and one `PostProcessing` event, and a failure while re-creating
   is reported with `possiblyPublished = false`. From the polling phases the new containers are created in
-  the same run.
+  the same run. Either way, the wait after a re-creation (and the `restart` hop itself) fires
+  `PostProcessing` with `reason` `retrying`, whether Meta reported an error or the container expired,
+  and also when only a carousel child was re-created. It is not a job retry: `PostRetrying` does not
+  fire, and the events' `retries` and `restarts` do not grow. The result's `payload['restarts']` counts
+  these re-creations.
 - **"Media not ready" (2207027) on `media_publish`**: the driver polls every `poll_interval` for
   `not_ready_fast_rounds` (5) rounds, then every `not_ready_backoff` (1800 s), never past the container's
   age limit (`container_max_age`). At that age the container is re-created once, then the post fails as

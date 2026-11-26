@@ -1566,6 +1566,287 @@ it('leaves the identifiers out when the driver has none', function () {
         ->and(eventsOf($events, PostFailed::class)[0]->exception->context)->not->toHaveKey('identifiers');
 });
 
+// --- Retries of the whole publish ------------------------------------------------
+
+it('counts the retries of the whole publish, not only of its last step', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 5),
+        PublishOutcome::pending(['phase' => 'await'], 30),
+        published(),
+    ];
+
+    push(publishJob());
+    work();
+
+    $retrying = eventsOf($events, PostRetrying::class);
+    $published = eventsOf($events, PostPublished::class);
+
+    expect($retrying)->toHaveCount(1)
+        ->and([$retrying[0]->attempt, $retrying[0]->retries, $retrying[0]->restarts])->toBe([1, 1, 0])
+        // The last step ran once: attempt 1, but the publish needed a second try.
+        ->and([$published[0]->attempt, $published[0]->retries, $published[0]->restarts])->toBe([1, 1, 0]);
+});
+
+it('keeps counting across a restart, which starts the step attempts over', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        new TemporaryException('The upload was discarded.', Platform::Facebook, FailureReason::ServerError, 0, ['restart' => true]),
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 5),
+        published(),
+    ];
+
+    push(publishJob());
+    work();
+
+    $retrying = eventsOf($events, PostRetrying::class);
+    $published = eventsOf($events, PostPublished::class)[0];
+
+    expect(array_map(fn (PostRetrying $e) => [$e->attempt, $e->retries, $e->restarts], $retrying))->toBe([[1, 1, 1], [1, 2, 1]])
+        ->and([$published->attempt, $published->retries, $published->restarts])->toBe([2, 2, 1]);
+});
+
+it('counts a re-dispatched create try once, also in the steps after it', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        PublishOutcome::commit(['phase' => 'create']),
+        new TemporaryException('Refused before sending.', Platform::Facebook, FailureReason::Network, 5, ['request_sent' => false]),
+        PublishOutcome::pending(['phase' => 'await'], 30),
+        published(),
+    ];
+
+    push(publishJob());
+    work();
+
+    $retrying = eventsOf($events, PostRetrying::class);
+    $published = eventsOf($events, PostPublished::class)[0];
+
+    expect(array_map(fn (PostRetrying $e) => [$e->attempt, $e->retries], $retrying))->toBe([[1, 1]])
+        ->and([$published->attempt, $published->retries])->toBe([1, 1]);
+});
+
+it('reports the retries on a final failure', function () {
+    config(['social.tries' => 2]);
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 5),
+        new TemporaryException('Still busy.', Platform::Facebook, FailureReason::ServerError, 5),
+    ];
+
+    push(publishJob());
+    work();
+
+    $failed = eventsOf($events, PostFailed::class);
+
+    expect(eventsOf($events, PostRetrying::class))->toHaveCount(1)
+        ->and([$failed[0]->attempt, $failed[0]->retries, $failed[0]->restarts])->toBe([2, 1, 0]);
+});
+
+it('does not count the delivery the worker fails without running it', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+
+    push(publishJob(['phase' => 'await'], 1));
+    // Five deliveries ran and were lost; the worker fails the sixth before it runs.
+    DB::table('jobs')->update(['attempts' => 5]);
+    work(1);
+
+    $failed = eventsOf($events, PostFailed::class);
+
+    expect(ScriptedDriver::$calls)->toBe([])
+        ->and([$failed[0]->attempt, $failed[0]->retries])->toBe([6, 4]);
+});
+
+it('reports the count a run restored from the store, when it fails as when it publishes', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+
+    // Another chain recorded its step: 4 retries and 1 restart so far.
+    $row = ['phase' => 'await', '_retries' => 4, '_retries_base' => 3, '_restarts' => 1, '_step' => 2, '_chain' => 'other-chain'];
+    store()->markPending('key-1', $row);
+    store()->markPending('key-2', $row);
+    ScriptedDriver::$script = [
+        new PermanentException('Rejected.', Platform::Facebook, FailureReason::MediaRejected),
+        published(),
+    ];
+
+    // failed() runs on a copy of the payload, which never saw the store.
+    push(publishJob());
+    work();
+    push(publishJob(null, 0, 'key-2'));
+    work();
+
+    $failed = eventsOf($events, PostFailed::class)[0];
+    $published = eventsOf($events, PostPublished::class)[0];
+
+    expect(array_column(ScriptedDriver::$calls, 'method'))->toBe(['resume', 'resume'])
+        ->and([$failed->retries, $failed->restarts])->toBe([4, 1])
+        ->and([$published->retries, $published->restarts])->toBe([4, 1]);
+});
+
+it('reads the count from the store when the worker gives up on a run that started from it', function (string $chain, int $retries) {
+    useDriver();
+    $events = recordEvents();
+    $job = publishJob();
+    $job->owner = 'chain-a';
+
+    store()->markCommitting('key-1', ['phase' => 'create', '_commits' => true, '_retries' => 3, '_retries_base' => 2, '_restarts' => 1, '_chain' => $chain]);
+    $job->failed(new TimeoutExceededException('PublishToConnectionJob has timed out.'));
+
+    $failed = eventsOf($events, PostFailed::class)[0];
+
+    expect([$failed->retries, $failed->restarts])->toBe([$retries, 1]);
+})->with([
+    // Its own earlier delivery wrote the row: what came before that payload.
+    'its own row' => ['chain-a', 2],
+    // Another dispatch wrote it: the publish's whole count.
+    'another chain\'s row' => ['chain-b', 3],
+]);
+
+it('counts a redelivered first step once, though it restores the row it wrote itself', function () {
+    useDriver();
+    useDatabaseQueue('flaky');
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 5),
+        // The next step is recorded, but queuing it fails: the queue redelivers this one.
+        PublishOutcome::pending(['phase' => 'await'], 30),
+        published(),
+    ];
+    FlakyDatabaseQueue::$failWhen = fn ($job) => $job instanceof PublishToConnectionJob && $job->pollCount === 1;
+
+    push(publishJob());
+    work();
+
+    $published = eventsOf($events, PostPublished::class)[0];
+
+    // One PostRetrying and one redelivery: the third attempt of the publish.
+    expect(array_column(ScriptedDriver::$calls, 'method'))->toBe(['publish', 'publish', 'resume'])
+        ->and(eventsOf($events, PostRetrying::class))->toHaveCount(1)
+        ->and([$published->attempt, $published->retries])->toBe([3, 2]);
+});
+
+it('counts each redelivery of a taken-over create once', function () {
+    useDriver();
+    $events = recordEvents();
+
+    store()->markCommitting('key-1', ['phase' => 'create', '_commits' => true, '_retries' => 2, '_step' => 3, '_chain' => 'other-chain']);
+
+    $payload = serialize(publishJob());
+    $rows = [];
+    $crash = function () use (&$rows) {
+        $rows[] = store()->committing('key-1')['state'];
+
+        return new \Error('The worker died.');
+    };
+    $deliver = function (int $attempts) use ($payload) {
+        $job = unserialize($payload);
+        $job->withFakeQueueInteractions();
+        $job->job->attempts = $attempts;
+        app()->call([$job, 'handle']);
+    };
+    // Put the row back as a dead worker leaves it.
+    $restore = function () use (&$rows) {
+        store()->forget('key-1');
+        store()->markCommitting('key-1', end($rows));
+    };
+
+    ScriptedDriver::$script = [$crash];
+    $deliver(1);
+    $restore();
+    ScriptedDriver::$script = [$crash];
+    $deliver(2);
+    $restore();
+    ScriptedDriver::$script = [published()];
+    $deliver(3);
+
+    $published = eventsOf($events, PostPublished::class)[0];
+
+    // 2 before the takeover, then 2 redeliveries. Each row counts the create in flight
+    // for a dispatch that would take over, and its own base for this payload's next delivery.
+    expect(array_map(fn (array $row) => [$row['_retries'], $row['_retries_base']], $rows))->toBe([[3, 2], [4, 2]])
+        ->and([$published->attempt, $published->retries])->toBe([3, 4]);
+});
+
+it('never lets a takeover count fewer retries than the chain announced', function () {
+    useDriver();
+    useDatabaseQueue();
+    $events = recordEvents();
+    ScriptedDriver::$script = [
+        PublishOutcome::commit(['phase' => 'create']),
+        new TemporaryException('Gateway timeout.', Platform::Facebook, FailureReason::ServerError, 600),
+    ];
+
+    push(publishJob());
+    work(2);
+
+    // The retry is lost; once the lease ran out, a same-key dispatch takes over.
+    DB::table('jobs')->delete();
+    Carbon::setTestNow(now()->addHours(2));
+    ScriptedDriver::$script = [published()];
+    push(publishJob());
+    work();
+
+    expect(eventsOf($events, PostRetrying::class)[0]->retries)->toBe(1)
+        ->and(ScriptedDriver::$calls[2]['state'][Pending::RECOVERING] ?? null)->toBeTrue()
+        ->and(eventsOf($events, PostPublished::class)[0]->retries)->toBe(1);
+});
+
+it('carries the count over a long wait split into hops, and records it for a resumed chain', function () {
+    useDriver();
+    useDatabaseQueue();
+    ScriptedDriver::$script = [
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 5),
+        PublishOutcome::pending(['phase' => 'await'], 30),
+    ];
+
+    push(publishJob());
+    work(2);
+
+    // The continuation after the retried step starts from one retry, and so does the store's copy.
+    expect(queuedCommands()[0]->priorRetries)->toBe(1)
+        ->and(store()->pendingState('key-1')['_retries'] ?? null)->toBe(1);
+
+    $hop = publishJob(['phase' => 'await'], 3, 'key-2');
+    $hop->priorRetries = 2;
+    $hop->notBefore = now()->getTimestamp() + 5000;
+    DB::table('jobs')->delete();
+    push($hop);
+    work(1);
+
+    $resumed = publishJob(null, 0, 'key-3');
+    $restore = (fn (array $stored) => $this->restoreStoredState($stored))->call($resumed, ['phase' => 'await', '_retries' => 4]);
+
+    expect(queuedCommands()[0]->priorRetries)->toBe(2)
+        ->and($restore)->toBe(['phase' => 'await'])
+        ->and($resumed->priorRetries)->toBe(4);
+});
+
+it('restores retry events queued before retries and restarts existed with zeros', function () {
+    $retrying = (new \ReflectionClass(PostRetrying::class))->newInstanceWithoutConstructor();
+    $retrying->__unserialize(['platform' => Platform::Facebook, 'errorSummary' => [], 'attempt' => 2]);
+
+    $published = (new \ReflectionClass(PostPublished::class))->newInstanceWithoutConstructor();
+    $published->__unserialize(['result' => PostResult::success(Platform::Facebook, 'p-1'), 'attempt' => 1]);
+
+    $failed = (new \ReflectionClass(PostFailed::class))->newInstanceWithoutConstructor();
+    $failed->__unserialize(['platform' => Platform::Facebook, 'exception' => new PermanentException('No.', Platform::Facebook, FailureReason::Unknown)]);
+
+    expect([$retrying->attempt, $retrying->retries, $retrying->restarts])->toBe([2, 0, 0])
+        ->and([$published->retries, $published->restarts, $published->replayed])->toBe([0, 0, false])
+        ->and([$failed->retries, $failed->restarts, $failed->attempt])->toBe([0, 0, 1]);
+});
+
 it('restores a PostProcessing queued before reason and identifiers existed with their defaults', function () {
     $event = (new \ReflectionClass(PostProcessing::class))->newInstanceWithoutConstructor();
     $event->__unserialize([

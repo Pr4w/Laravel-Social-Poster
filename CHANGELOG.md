@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade steps are in
 [UPGRADE.md](UPGRADE.md).
 
+## [1.1.9] - 2026-11-26
+
+### Added
+
+- `retries` and `restarts` on `PostRetrying`, `PostPublished` and `PostFailed`. `attempt` is the
+  attempt of the current step and starts again at 1 on every step (and after a restart), so it cannot
+  tell how many tries a publish took. `retries` counts the retries of the whole publish, across its
+  steps and restarts (on `PostRetrying`, this one included), plus its runs the queue delivered again;
+  a publish that ends with `retries = 2` ended on its third attempt. `restarts` counts the times it
+  started over from scratch. Both are carried by the job through its continuations and restarts, kept
+  with the store's copy of the step so a dispatch that takes over (a same-key re-dispatch,
+  `reconcile()`) continues them, and counted the same way by `postNow()`. They come last with a
+  default of 0, so events queued by an older release still unserialise.
+
+### Changed
+
+- `postNow()` matches the queued job on the events it fires:
+  - it announces a restart with `PostRetrying`;
+  - `PostProcessing` also fires for a create step's waits and for the wait it hands to the queue, with
+    `reason` and `identifiers` (1.1.4 and 1.1.7 had only changed the job);
+  - after a restart, `poll` and `elapsedSeconds` count from the restart;
+  - `PostFailed` names the platform's ids in `context['identifiers']`.
+- Instagram: the hop that re-creates containers (failed on Meta's side, or expired), and the wait after
+  a re-created container or carousel child, report `PostProcessing::$reason = retrying` instead of
+  `processing`.
+
 ## [1.1.8] - 2026-11-20
 
 ### Fixed
@@ -423,6 +449,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Upgrade s
   correlation metadata.
 - `LocalMediaGateway`, `FFProbeInspector`, typed platform options and the `extra` passthrough.
 
+[1.1.9]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/Pr4w/Laravel-Social-Poster/compare/v1.1.5...v1.1.6

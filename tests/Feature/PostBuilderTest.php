@@ -164,6 +164,15 @@ class BuilderDriver extends AbstractPlatform
     }
 }
 
+/** Reports state['container_id'] as the platform id it already gave. */
+class IdentifyingBuilderDriver extends BuilderDriver
+{
+    public function identifiersOf(array $state): array
+    {
+        return is_string($state['container_id'] ?? null) ? ['container_id' => $state['container_id']] : [];
+    }
+}
+
 /** A driver whose account identity is a user_id credential, as on X. */
 class UserIdDriver extends BuilderDriver
 {
@@ -304,6 +313,125 @@ afterEach(function () {
 });
 
 // --- v1.0 surface -------------------------------------------------------------
+
+it('counts postNow retries and restarts like the queued job', function () {
+    useDrivers();
+    $events = recordEvents();
+    BuilderDriver::$scripts['facebook'] = [
+        new TemporaryException('Discarded.', Platform::Facebook, FailureReason::ServerError, 0, ['restart' => true]),
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 1),
+        published(Platform::Facebook),
+    ];
+
+    SocialPoster::on('facebook')->using(creds())->caption('x')->postNow();
+
+    $published = eventsOf($events, PostPublished::class)[0];
+
+    // The restart is announced too, as the job announces it.
+    expect(array_map(fn (PostRetrying $e) => [$e->attempt, $e->retries, $e->restarts], eventsOf($events, PostRetrying::class)))->toBe([[1, 1, 1], [1, 2, 1]])
+        ->and([$published->attempt, $published->retries, $published->restarts])->toBe([2, 2, 1]);
+});
+
+it('reports postNow waits as the job does: create-step waits too, with reason and identifiers', function () {
+    useDrivers(IdentifyingBuilderDriver::class, Platform::Facebook);
+    $events = recordEvents();
+    BuilderDriver::$scripts['facebook'] = [
+        PublishOutcome::pending(['phase' => 'await', 'container_id' => 'c-1'], 5),
+        PublishOutcome::commit(['phase' => 'create', 'container_id' => 'c-1'], 10)->withReason(PostProcessing::REASON_NOT_READY),
+        PublishOutcome::commit(['phase' => 'create', 'container_id' => 'c-1']),
+        published(Platform::Facebook),
+    ];
+
+    SocialPoster::on('facebook')->using(creds())->caption('x')->postNow();
+
+    expect(array_map(fn (PostProcessing $e) => [$e->reason, $e->identifiers], eventsOf($events, PostProcessing::class)))->toBe([
+        [PostProcessing::REASON_PROCESSING, ['container_id' => 'c-1']],
+        [PostProcessing::REASON_NOT_READY, ['container_id' => 'c-1']],
+    ])
+        ->and(eventsOf($events, PostPublished::class))->toHaveCount(1);
+});
+
+it('hands a postNow publish to the queue with its count, announcing the wait like the job', function (PublishOutcome $wait, array $announced) {
+    config(['queue.default' => 'redis', 'social.sync.max_wait' => 30]);
+    useDrivers(IdentifyingBuilderDriver::class, Platform::Facebook);
+    Queue::fake();
+    $events = recordEvents();
+    BuilderDriver::$scripts['facebook'] = [
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 1),
+        $wait,
+    ];
+
+    $result = SocialPoster::on('facebook')->using(creds())->caption('x')->postNow()['facebook'];
+
+    $job = Queue::pushed(PublishToConnectionJob::class)->first();
+
+    expect($result->payload['handed_off'] ?? null)->toBeTrue()
+        ->and($job->priorRetries)->toBe(1)
+        ->and(app(IdempotencyStore::class)->pendingState($job->idempotencyKey())['_retries'] ?? null)->toBe(1)
+        ->and(array_map(fn (PostProcessing $e) => [$e->reason, $e->identifiers], eventsOf($events, PostProcessing::class)))->toBe([$announced]);
+})->with([
+    'a processing wait' => [
+        PublishOutcome::pending(['phase' => 'await', 'container_id' => 'c-1'], 600),
+        [PostProcessing::REASON_PROCESSING, ['container_id' => 'c-1']],
+    ],
+    'a create step waiting' => [
+        PublishOutcome::commit(['phase' => 'create', 'container_id' => 'c-1'], 600)->withReason(PostProcessing::REASON_NOT_READY),
+        [PostProcessing::REASON_NOT_READY, ['container_id' => 'c-1']],
+    ],
+]);
+
+it('continues a recorded postNow run with its count', function () {
+    useDrivers();
+    $events = recordEvents();
+    $key = PublishToConnectionJob::makeIdempotencyKey(Platform::Facebook, 'rec-1', 'page-1');
+    app(IdempotencyStore::class)->markPending($key, ['phase' => 'await', '_retries' => 2, '_restarts' => 1, '_step' => 3, '_chain' => 'crashed']);
+
+    SocialPoster::on('facebook')->using(creds())->caption('x')->idempotencyKey('rec-1')->postNow();
+
+    $published = eventsOf($events, PostPublished::class)[0];
+
+    expect(callsFor('facebook')[0]['method'])->toBe('resume')
+        ->and([$published->retries, $published->restarts])->toBe([2, 1]);
+});
+
+it('reports a postNow failure with its count and ids, and records the count', function () {
+    useDrivers(IdentifyingBuilderDriver::class, Platform::Facebook);
+    $events = recordEvents();
+    BuilderDriver::$scripts['facebook'] = [
+        PublishOutcome::pending(['phase' => 'await', 'container_id' => 'c-1'], 1),
+        new TemporaryException('Busy.', Platform::Facebook, FailureReason::ServerError, 1),
+        new PermanentException('Lost.', Platform::Facebook, FailureReason::OutcomeUnknown, ['possibly_published' => true]),
+    ];
+
+    SocialPoster::on('facebook')->using(creds())->caption('x')->postNow();
+
+    $failed = eventsOf($events, PostFailed::class)[0];
+
+    expect([$failed->retries, $failed->restarts])->toBe([1, 0])
+        ->and($failed->exception->context['identifiers'] ?? null)->toBe(['container_id' => 'c-1'])
+        ->and(app(IdempotencyStore::class)->record($failed->idempotencyKey)['state']['_retries'] ?? null)->toBe(1);
+});
+
+it('says a postNow verify step after a lost create is verifying, and starts the steps over on a restart', function () {
+    useDrivers();
+    $events = recordEvents();
+    BuilderDriver::$scripts['facebook'] = [
+        PublishOutcome::pending(['phase' => 'await'], 5),
+        new TemporaryException('Discarded.', Platform::Facebook, FailureReason::ServerError, 0, ['restart' => true]),
+        PublishOutcome::pending(['phase' => 'await'], 5),
+        PublishOutcome::commit(['phase' => 'verify'], 5, null, true),
+        published(Platform::Facebook),
+    ];
+
+    SocialPoster::on('facebook')->using(creds())->caption('x')->postNow();
+
+    // As the job: after a restart, polls and elapsed time count from the restart.
+    expect(array_map(fn (PostProcessing $e) => [$e->poll, $e->elapsedSeconds, $e->reason], eventsOf($events, PostProcessing::class)))->toBe([
+        [1, 0, PostProcessing::REASON_PROCESSING],
+        [1, 0, PostProcessing::REASON_PROCESSING],
+        [2, 5, PostProcessing::REASON_VERIFYING],
+    ]);
+});
 
 it('keeps the v1.0 call sites working: on/using/withOptions then post, postNow and validate', function () {
     useDrivers();

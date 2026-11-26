@@ -1222,6 +1222,33 @@ it('re-creates only the carousel child that failed on Meta’s side', function (
         ]);
 });
 
+it('says the publish is retrying when Meta broke a container and it re-creates it', function () {
+    igFake([
+        'GET /c1' => igStatus('ERROR', 'Media upload has failed with error code 2207001'),
+        IG_MEDIA => igRes(['id' => 'c2']),
+        'GET /v1' => igStatus('ERROR', 'Media upload has failed with error code 2207053'),
+        'GET /v2' => igStatus('IN_PROGRESS'),
+    ]);
+
+    $reel = igPost([Media::video('https://cdn.example.com/reel.mp4')]);
+    $fresh = igDriver()->publish($reel);
+    $hop = igDriver()->resume($reel, igPublishState(['ready' => false, 'media_type' => 'REELS']));
+    $recreated = igDriver()->resume($reel, $hop->state);
+
+    $carousel = igPost([Media::video('https://cdn.example.com/a.mp4'), Media::video('https://cdn.example.com/c.mp4')]);
+    $children = igDriver()->resume($carousel, ['phase' => 'await_children', 'children' => ['v1', 'v2'], 'pending_videos' => ['v1', 'v2'], 'media_type' => 'CAROUSEL']);
+    $plain = igDriver()->resume($carousel, ['phase' => 'await_children', 'children' => ['v1b', 'v2'], 'pending_videos' => ['v2'], 'media_type' => 'CAROUSEL']);
+
+    // Waits the job reports (not commit hops): a first one says processing, one after a re-creation retrying.
+    expect([$fresh->commits, $fresh->reason])->toBe([false, PostProcessing::REASON_PROCESSING])
+        ->and($hop->state['phase'])->toBe('restart')
+        ->and([$hop->commits, $hop->reason])->toBe([false, PostProcessing::REASON_RETRYING])
+        ->and($recreated->state['container_id'])->toBe('c2')
+        ->and([$recreated->commits, $recreated->reason])->toBe([false, PostProcessing::REASON_RETRYING])
+        ->and($children->reason)->toBe(PostProcessing::REASON_RETRYING)
+        ->and($plain->reason)->toBe(PostProcessing::REASON_PROCESSING);
+});
+
 it('re-creates no carousel child before every child read succeeded', function () {
     igFake([
         'GET /v1' => igStatus('ERROR', 'Error: Media upload has failed with error code 2207001'),
